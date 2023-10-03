@@ -40,7 +40,7 @@ class PrimaryTable:
 
     def __post_init__(self):
         if not len(self.name):
-            self.name = 'primary'
+            self.name = 'primary_spectrometer'
 
     def make_sql_table(self):
         """Construct a SQL table definition for the primary parameters"""
@@ -66,29 +66,29 @@ class PrimaryDB:
         from sqlite3 import connect
         self.db = connect(db_file)
         self.cursor = self.db.cursor()
-        self.primary_table = primary_table
+        self.table = primary_table
 
         # check if the database file contains the primary table already
-        self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (self.primary_table.name,))
+        self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (self.table.name,))
         if len(self.cursor.fetchall()) == 0:
-            self.cursor.execute(self.primary_table.make_sql_table())
+            self.cursor.execute(self.table.make_sql_table())
             self.db.commit()
 
     def __del__(self):
         self.db.close()
 
     def insert(self, parameters: PrimaryParameters, extras: dict):
-        self.cursor.execute(self.primary_table.make_sql_insert(parameters, extras))
+        self.cursor.execute(self.table.make_sql_insert(parameters, extras))
         self.db.commit()
 
     def query(self, parameters: PrimaryParameters):
-        self.cursor.execute(self.primary_table.query(parameters))
+        self.cursor.execute(self.table.query(parameters))
         return self.cursor.fetchall()
 
     def remove(self, parameters: PrimaryParameters):
-        self.cursor.execute(f"DELETE FROM {self.primary_table.name} WHERE {parameters.between_query()}")
+        self.cursor.execute(f"DELETE FROM {self.table.name} WHERE {parameters.between_query()}")
         self.db.commit()
 
     def query_extras(self, parameters: PrimaryParameters):
-        self.cursor.execute(self.primary_table.query_extras(parameters))
+        self.cursor.execute(self.table.query_extras(parameters))
         return self.cursor.fetchall()
