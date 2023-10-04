@@ -9,7 +9,7 @@ class MStyleRange:
         self.step = step
 
     def __iter__(self):
-        return self
+        return MStyleRange(self.start, self.stop, self.step)
 
     def __next__(self):
         if (self.step > 0 and self.start > self.stop) or (self.step < 0 and self.start < self.stop) or self.step == 0:
@@ -30,8 +30,11 @@ class MStyleRange:
         The string should be of the form start:step:stop
         """
         def float_or_int(s):
-            f = float(s)
-            return int(s) if f.is_integer() else f
+            try:
+                return int(s)
+            except ValueError:
+                pass
+            return float(s)
 
         if string.count(':') > 2:
             raise ValueError(f'Range string {string} contains more than two colons')
