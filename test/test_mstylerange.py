@@ -1,5 +1,5 @@
 import unittest
-from mcbifrost.run import MStyleRange
+from mcbifrost.range import MStyleRange
 
 class MStyleRangeTestCase(unittest.TestCase):
     def test_integer_range(self):
@@ -29,10 +29,10 @@ class MStyleRangeTestCase(unittest.TestCase):
         self.assertEqual(len(r), 5)
 
         r = MStyleRange.from_str('1.0:0.2:10.0')
-        # for a, b in zip(list(r), [x/10 for x in range(10, 112, 2)]):
-        #     self.assertAlmostEqual(a, b)
-        self.assertEqual(50, (10.0-1.0)/0.2 + 1)
-        self.assertEqual(len(r), 50)
+        for a, b in zip(list(r), [x/10 for x in range(10, 102, 2)]):
+            self.assertAlmostEqual(a, b)
+        self.assertEqual(46, (10.0-1.0)/0.2 + 1)
+        self.assertEqual(len(r), 46)
 
 
 
