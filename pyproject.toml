@@ -3,7 +3,7 @@ requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mccode"
+name = "mcbifrost"
 dependencies = [
     'zenlog==1.1,',
     "importlib_metadata; python_version<'3.8'",
