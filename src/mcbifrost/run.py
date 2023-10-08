@@ -2,27 +2,39 @@ from typing import Union
 from .range import MRange
 
 
-def parse_run():
+def make_run_parser():
     from argparse import ArgumentParser
     parser = ArgumentParser('mcbifrost_run')
-    parser.add_argument('instrument', nargs=1, type=str, default=None)
+    parser.add_argument('instrument', nargs=1, type=str, default=None
+                        , help='Instrument `.instr` file name')
     parser.add_argument('parameters', nargs='*', type=str, default=None)
+    parser.add_argument('-R', action='append', default=[], help='Runtime parameters')
+    parser.add_argument('-g', '--grid', action='store_true', default=False, help='Grid scan')
+    return parser
 
-    args = parser.parse_args()
 
-    parameters = {}
-    while len(args.parameters):
-        if '=' in args.parameters[0]:
-            k, v = args.parameters[0].split('=')
-            parameters[k] = MRange.from_str(v)
-        elif len(args.parameters) > 1 and '=' not in args.parameters[1]:
-            parameters[args.parameters[0]] = MRange.from_str(args.parameters[1])
-            del args.parameters[1]
+def parse_scan_parameters(input: list[str]) -> dict[str, MRange]:
+    """Parse a list of input parameters into a dictionary of MRange objects.
+
+    :parameter parameters: A list of ranged parameters.
+    """
+    ranges = {}
+    while len(input):
+        if '=' in input[0]:
+            k, v = input[0].split('=')
+            ranges[k.lower()] = MRange.from_str(v)
+        elif len(input) > 1 and '=' not in input[1]:
+            ranges[input[0].lower()] = MRange.from_str(input[1])
+            del input[1]
         else:
-            raise ValueError(f'Invalid parameter {args.parameters[0]}')
-        del args.parameters[0]
-    print(args)
-    print(parameters)
+            raise ValueError(f'Invalid parameter: {input[0]}')
+        del input[0]
+    return ranges
+
+
+def parse_run():
+    args = make_run_parser().parse_args()
+    parameters = parse_scan_parameters(args.parameters)
     return args, parameters
 
 

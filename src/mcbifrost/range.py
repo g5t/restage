@@ -8,6 +8,9 @@ class MRange:
         self.stop = stop
         self.step = step
 
+    def __eq__(self, other):
+        return self.start == other.start and self.stop == other.stop and self.step == other.step
+
     def __iter__(self):
         def range_gen(start, stop, step):
             v = start
