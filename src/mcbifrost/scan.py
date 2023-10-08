@@ -108,7 +108,7 @@ def run_point(args, parameters):
     pass
 
 
-def run():
+def entrypoint():
     """Entrypoint for the mcbifrost_run command."""
     args, parameters = parse_run()
     parameters = energy_to_chopper_parameters(parameters)
