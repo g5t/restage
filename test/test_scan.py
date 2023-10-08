@@ -1,38 +1,39 @@
 import unittest
-from mcbifrost.scan import make_run_parser
+from mcbifrost.scan import make_scan_parser
 
 
 class RunParserTestCase(unittest.TestCase):
     def setUp(self):
-        self.parser = make_run_parser()
+        self.parser = make_scan_parser()
 
     def test_instrument(self):
-        args = self.parser.parse_args(['test.instr'])
-        self.assertEqual(args.instrument, ['test.instr'])
+        args = self.parser.parse_args(['test.instr', 'secondary'])
+        self.assertEqual(args.primary, ['test.instr'])
+        self.assertEqual(args.secondary, ['secondary'])
 
     def test_parameters(self):
-        args = self.parser.parse_args(['test.instr', 'a=1', 'b=2'])
+        args = self.parser.parse_args(['test.instr', 'secondary', 'a=1', 'b=2'])
         self.assertEqual(args.parameters, ['a=1', 'b=2'])
 
     def test_runtime_parameters(self):
-        args = self.parser.parse_args(['test.instr', '-R', 'a=1', '-R', 'b=2'])
+        args = self.parser.parse_args(['test.instr', 'secondary', '-R', 'a=1', '-R', 'b=2'])
         self.assertEqual(args.R, ['a=1', 'b=2'])
 
     def test_grid(self):
-        args = self.parser.parse_args(['test.instr'])
+        args = self.parser.parse_args(['primary.instr', 'secondary'])
         self.assertEqual(args.grid, False)
-        args = self.parser.parse_args(['test.instr', '-g'])
+        args = self.parser.parse_args(['test.instr', 'secondary', '-g'])
         self.assertEqual(args.grid, True)
 
     def test_multiple_parameters(self):
-        args = self.parser.parse_args(['test.instr', 'a=1:3', 'b', '4:6', 'c=3', '-R', 'a=15', '-Rb=16'])
+        args = self.parser.parse_args(['test.instr', 'secondary', 'a=1:3', 'b', '4:6', 'c=3', '-R', 'a=15', '-Rb=16'])
         self.assertEqual(args.parameters, ['a=1:3', 'b', '4:6', 'c=3'])
         self.assertEqual(args.R, ['a=15', 'b=16'])
 
     def test_scan_parameters(self):
         from mcbifrost.scan import parse_scan_parameters
         from mcbifrost.range import MRange
-        args = self.parser.parse_args(['test.instr', 'a=1:3', 'b', '4:0.2:6', 'c=3'])
+        args = self.parser.parse_args(['test.instr', 'secondary', 'a=1:3', 'b', '4:0.2:6', 'c=3'])
         self.assertEqual(args.parameters, ['a=1:3', 'b', '4:0.2:6', 'c=3'])
         ranges = parse_scan_parameters(args.parameters)
         self.assertEqual(list(ranges['a']), [1, 2, 3])
@@ -44,7 +45,7 @@ class RunParserTestCase(unittest.TestCase):
 
     def test_scan_points(self):
         from mcbifrost.scan import parse_scan_parameters, parameters_to_scan
-        args = self.parser.parse_args(['test.instr', 'a=1:3', 'b', '5:0.5:6', 'c=3'])
+        args = self.parser.parse_args(['test.instr', 'secondary', 'a=1:3', 'b', '5:0.5:6', 'c=3'])
         ranges = parse_scan_parameters(args.parameters)
         names, points = parameters_to_scan(ranges)
         self.assertEqual(names, ['a', 'b', 'c'])

@@ -87,3 +87,34 @@ class Singular:
 
     def __len__(self):
         return self.maximum
+
+    @classmethod
+    def from_str(cls, string):
+        def float_or_int_or_str(s):
+            try:
+                return int(s)
+            except ValueError:
+                pass
+            try:
+                return float(s)
+            except ValueError:
+                return s
+
+        if string.count(':') > 0:
+            raise ValueError(f'Singular string {string} contains a colon')
+        return cls(float_or_int_or_str(string))
+
+
+def parse_list(range_type, unparsed: list[str]):
+    ranges = {}
+    while len(unparsed):
+        if '=' in unparsed[0]:
+            k, v = unparsed[0].split('=', 1)
+            ranges[k.lower()] = range_type.from_str(v)
+        elif len(unparsed) > 1 and '=' not in unparsed[1]:
+            ranges[unparsed[0].lower()] = range_type.from_str(unparsed[1])
+            del unparsed[1]
+        else:
+            raise ValueError(f'Invalid parameter: {unparsed[0]}')
+        del unparsed[0]
+    return ranges

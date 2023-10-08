@@ -2,38 +2,30 @@ from typing import Union
 from .range import MRange
 
 
-def make_run_parser():
+def make_scan_parser():
     from argparse import ArgumentParser
-    parser = ArgumentParser('mcbifrost_run')
-    parser.add_argument('instrument', nargs=1, type=str, default=None
-                        , help='Instrument `.instr` file name')
+    parser = ArgumentParser('mcbifrost_scan')
+    parser.add_argument('primary', nargs=1, type=str, default=None,
+                        help='Primary spectrometer `.instr` file name')
+    parser.add_argument('secondary', nargs=1, type=str, default=None,
+                        help='Secondary spectrometer `.instr` file name')
     parser.add_argument('parameters', nargs='*', type=str, default=None)
     parser.add_argument('-R', action='append', default=[], help='Runtime parameters')
     parser.add_argument('-g', '--grid', action='store_true', default=False, help='Grid scan')
     return parser
 
 
-def parse_scan_parameters(input: list[str]) -> dict[str, MRange]:
+def parse_scan_parameters(unparsed: list[str]) -> dict[str, MRange]:
     """Parse a list of input parameters into a dictionary of MRange objects.
 
     :parameter parameters: A list of ranged parameters.
     """
-    ranges = {}
-    while len(input):
-        if '=' in input[0]:
-            k, v = input[0].split('=')
-            ranges[k.lower()] = MRange.from_str(v)
-        elif len(input) > 1 and '=' not in input[1]:
-            ranges[input[0].lower()] = MRange.from_str(input[1])
-            del input[1]
-        else:
-            raise ValueError(f'Invalid parameter: {input[0]}')
-        del input[0]
-    return ranges
+    from .range import parse_list
+    return parse_list(MRange, unparsed)
 
 
-def parse_run():
-    args = make_run_parser().parse_args()
+def parse_scan():
+    args = make_scan_parser().parse_args()
     parameters = parse_scan_parameters(args.parameters)
     return args, parameters
 
@@ -110,7 +102,7 @@ def run_point(args, parameters):
 
 def entrypoint():
     """Entrypoint for the mcbifrost_run command."""
-    args, parameters = parse_run()
+    args, parameters = parse_scan()
     parameters = energy_to_chopper_parameters(parameters)
     names, scan = parameters_to_scan(parameters)
     print('Now running mcbifrost_run')
