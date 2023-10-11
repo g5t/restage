@@ -6,11 +6,14 @@ build-backend = "setuptools.build_meta"
 name = "mcbifrost"
 dependencies = [
     'zenlog==1.1,',
+    'platformdirs==3.11',
     "importlib_metadata; python_version<'3.8'",
+    "mccode @ file:///home/g/Code/mccode-antlr"
 ]
 dynamic = ["version"]
 
 [project.scripts]
-mcbifrost_run = "mcbifrost.run:run"
+mcbifrost_run = "mcbifrost.run:entrypoint"
+mcbifrost_single = "mcbifrost.single:entrypoint"
 
 [tool.setuptools_scm]

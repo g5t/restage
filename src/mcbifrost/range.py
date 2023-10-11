@@ -1,3 +1,5 @@
+from typing import Union
+
 
 class MRange:
     """A range of values for a parameter in a MATLAB style.
@@ -118,3 +120,31 @@ def parse_list(range_type, unparsed: list[str]):
             raise ValueError(f'Invalid parameter: {unparsed[0]}')
         del unparsed[0]
     return ranges
+
+
+def parameters_to_scan(parameters: dict[str, Union[list, MRange]], grid: bool = False):
+    """Convert a dictionary of ranged parameters to a list of parameter names and an iterable of parameter value tuples.
+
+    The ranged parameters can be either MRange objects or lists of values. If a list of values is provided, it will be
+    iterated over directly.
+
+    :parameter parameters: A dictionary of ranged parameters.
+    :parameter grid: Controls how the parameters are iterated; True implies a grid scan, False implies a linear scan.
+    """
+    names = [x.lower() for x in parameters.keys()]
+    values = [x if hasattr(x, '__iter__') else [x] for x in parameters.values()]
+    if grid:
+        from itertools import product
+        # singular MRange objects *should* stop the grid along their axis:
+        return names, product(*values)
+    else:
+        # replace singular MRange entries with Singular iterators, to avoid stopping the zip early:
+        n_max = max([len(v) for v in values])
+        for i, v in enumerate(values):
+            if len(v) > 1 and len(v) != n_max:
+                others = [names[i] for i, n in enumerate(values) if len(n) == n_max]
+                par = 'parameters' if len(others) > 1 else 'parameter'
+                have = 'have' if len(others) > 1 else 'has'
+                others = ', '.join(others)
+                raise ValueError(f'Parameter {names[i]} has {len(v)} values, but {par} {others} {have} {n_max}')
+        return names, zip(*[v if len(v) > 1 else Singular(v[0], n_max) for v in values])

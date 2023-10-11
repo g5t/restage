@@ -1,13 +1,18 @@
-from .tables import (SimulationTableParameters, InstrSimulationTable, PrimaryInstrSimulationTable,
-                     SecondaryInstrSimulationTable, NexusStructureTableEntry, InstrTableEntry)
-from .primary import PrimaryDB
+from .tables import (SimulationEntry,
+                     SimulationTableEntry,
+                     # SecondaryInstrSimulationTable,
+                     NexusStructureEntry,
+                     InstrEntry
+                     )
+from .database import Database
+from .cache import DATABASE
 
 __all__ = [
-    'SimulationTableParameters',
-    'InstrSimulationTable',
-    'PrimaryInstrSimulationTable',
-    'SecondaryInstrSimulationTable',
-    'NexusStructureTableEntry',
-    'InstrTableEntry',
-    'PrimaryDB'
+    'SimulationEntry',
+    'SimulationTableEntry',
+    # 'SecondaryInstrSimulationTable',
+    'NexusStructureEntry',
+    'InstrEntry',
+    'Database',
+    'DATABASE'
 ]
