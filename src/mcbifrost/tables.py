@@ -7,11 +7,17 @@ def uuid():
     return str(uuid4()).replace('-', '')
 
 
+COMMON_COLUMNS = ['seed', 'ncount', 'output_path', 'gravitation']
+
+
 @dataclass
 class SimulationEntry:
     """A class to represent the primary parameters of a simulation which constitute an entry in a specific table"""
     parameter_values: dict[str, Value]
+    seed: int = None
+    ncount: int = None
     output_path: str = field(default_factory=str)
+    gravitation: bool = False
     precision: dict[str, float] = field(default_factory=dict)
     id: str = field(default_factory=uuid)
 
@@ -25,9 +31,13 @@ class SimulationEntry:
             raise RuntimeError(f"Column names {names} do not match query result {values}")
 
         q_id = values[names.index('id')]
+        q_seed = values[names.index('seed')]  # already converted to None if <null> stored in table
+        q_ncount = values[names.index('ncount')]  # same here
         q_path = values[names.index('output_path')]
-        pv = {k: float(v) if isinstance(v, str) else v for k, v in zip(names, values) if k not in ('id', 'output_path')}
-        return cls(pv, output_path=q_path, id=q_id)
+        q_gravitation = values[names.index('gravitation')] > 0
+        extracted = ('id', 'seed', 'ncount', 'output_path', 'gravitation')
+        pv = {k: v for k, v in zip(names, values) if k not in extracted}
+        return cls(pv, seed=q_seed, ncount=q_ncount, output_path=q_path, gravitation=q_gravitation, id=q_id)
 
     def __post_init__(self):
         for k, v in self.parameter_values.items():
@@ -44,7 +54,7 @@ class SimulationEntry:
                 self.precision[k] = self.precision[best[0]] if len(best) else self.parameter_values[k].value / 10000
 
     def __hash__(self):
-        return hash(tuple(self.parameter_values.values()))
+        return hash((tuple(self.parameter_values.values()), self.seed, self.ncount, self.gravitation))
 
     def between_query(self):
         """Construct a query to select the primary parameters from a SQL database
@@ -58,17 +68,28 @@ class SimulationEntry:
                 each.append(f'{k}={v.value}')
             else:
                 each.append(f"{k}='{v.value}'")
+        if self.seed is not None:
+            each.append(f"seed={self.seed}")
+        if self.ncount is not None:
+            each.append(f"ncount={self.ncount}")
+        if self.gravitation:
+            each.append(f"gravitation={self.gravitation}")
         return ' AND '.join(each)
 
     def columns(self):
         """Construct a list of column names for the primary parameters"""
-        columns = ['id', 'output_path']
+        columns = ['id']
+        columns.extend(COMMON_COLUMNS)  # add the columns that appear in both simulation_tables and simulation tables
         columns.extend([f"{k}" for k in self.parameter_values.keys()])
         return columns
 
     def values(self):
         """Construct a list of column values for the primary parameters"""
-        values = [f"'{x}'" for x in (self.id, self.output_path)]
+        values = [f"'{self.id}'"]
+        values.append('null' if self.seed is None else f"{self.seed}")
+        values.append('null' if self.ncount is None else f"{self.ncount}")
+        values.append('null' if self.output_path is None else f"'{self.output_path}'")
+        values.append(f'{self.gravitation}')
         for v in self.parameter_values.values():
             if v.is_float or v.is_int:
                 values.append(f"{v.value}")
@@ -78,6 +99,10 @@ class SimulationEntry:
 
     def insert_sql_table(self, table_name: str):
         """Construct a SQL insert statement for the primary parameters"""
+        # # The following could be used to provide _raw_ values to the execution, instead of str formatting them
+        # cols = ', '.join(self.columns())
+        # vals = ', '.join('?' for _ in self.values())
+        # return f"INSERT INTO {table_name} ({cols}) VALUES ({vals})"
         return f"INSERT INTO {table_name} ({', '.join(self.columns())}) VALUES ({', '.join(self.values())})"
 
     def create_containing_sql_table(self, table_name: str):
@@ -95,20 +120,29 @@ class SimulationTableEntry:
 
     @classmethod
     def from_query_result(cls, values):
+        from json import loads
         pid,  name, parameters = values
-        parameters = parameters.translate(str.maketrans('', '', '\'\" []')).split(',')
-        return cls(parameters, name, pid)
+        return cls(loads(parameters), name, pid)
 
     def __post_init__(self):
         if len(self.name) == 0:
             self.name = f'primary_instr_table_{self.id}'
+        if ' ' in self.name:
+            from zenlog import log
+            log.warn(f'"{self.name}" is not a valid SQL table name, spaces replaced by underscores')
+            self.name = self.name.replace(' ', '_')
+
+    @property
+    def table_name(self):
+        return self.name
 
     @staticmethod
     def columns():
         return ['id', 'name', 'parameters']
 
     def values(self):
-        return [f"'{x}'" for x in [self.id, self.name, str(self.parameters)]]
+        from json import dumps
+        return [f"'{x}'" for x in [self.id, self.name, dumps(self.parameters)]]
 
     @classmethod
     def create_sql_table(cls, table_name: str):
@@ -122,21 +156,34 @@ class SimulationTableEntry:
     def create_simulation_sql_table(self):
         """Construct a SQL table definition for the primary parameters"""
         # these column names _must_ match the names in SimulationTableParameters
-        columns = ['id', 'output_path']
+        columns = ['id'] + COMMON_COLUMNS
         columns.extend([k for k in self.parameters])
-        return f"CREATE TABLE {self.name} ({', '.join(columns)})"
+        return f"CREATE TABLE {self.table_name} ({', '.join(columns)})"
 
     def insert_simulation_sql_table(self, parameters: SimulationEntry):
         """Construct a SQL insert statement for the primary parameters"""
         if any([k not in self.parameters for k in parameters.parameter_values]):
             raise RuntimeError(f"Extra values {parameters.parameter_values.keys()} not in {self.parameters}")
-        return parameters.insert_sql_table(self.name)
+        return parameters.insert_sql_table(self.table_name)
+
+    def query_simulation_tables(self, simulation_tables_name, use_id=False, use_name=True, use_parameters=True):
+        parts = []
+        if use_id:
+            parts.append(f"id='{self.id}'")
+        elif use_name:
+            parts.append(f"name='{self.table_name}'")
+        elif use_parameters:
+            from json import dumps
+            parts.append(f"parameters={dumps(self.parameters)}")
+        else:
+            raise RuntimeError("At least one of use_id, use_name, or use_parameters must be True")
+        return f"SELECT * FROM {simulation_tables_name} WHERE {' AND '.join(parts)}"
 
     def query(self, parameters: SimulationEntry):
-        return f'SELECT * FROM {self.name} WHERE {parameters.between_query()}'
+        return f'SELECT * FROM {self.table_name} WHERE {parameters.between_query()}'
 
     def output_path(self, parameters: SimulationEntry):
-        return f'SELECT output_path FROM {self.name} WHERE {parameters.between_query()}'
+        return f'SELECT output_path FROM {self.table_name} WHERE {parameters.between_query()}'
 
 
 

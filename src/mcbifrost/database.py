@@ -16,6 +16,7 @@ class Database:
         self.nexus_structures_table = nexus_structures_table or 'nexus_structures'
         self.simulations_table = simulations_table or 'simulation_tables'
         # self.secondary_simulations_table = secondary_simulations_table or 'secondary_simulation_tables'
+        self.verbose = False
 
         # check if the database file contains the tables:
         for table, tt in ((self.instr_file_table, InstrEntry),
@@ -30,13 +31,17 @@ class Database:
     def __del__(self):
         self.db.close()
 
+    def announce(self, msg: str):
+        if self.verbose:
+            print(msg)
+
     def table_exists(self, table_name: str):
         self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
         return len(self.cursor.fetchall()) > 0
 
     def insert_instr_file(self, instr_file: InstrEntry):
         command = instr_file.insert_sql_table(table_name=self.instr_file_table)
-        print(command)
+        self.announce(command)
         self.cursor.execute(command)
         self.db.commit()
 
@@ -47,12 +52,13 @@ class Database:
     def query_instr_file(self, search: dict) -> list[InstrEntry]:
         query = f"SELECT * FROM {self.instr_file_table} WHERE "
         query += ' AND '.join([f"{k}='{v}'" if isinstance(v, str) else f"{k}={v}" for k, v in search.items()])
+        self.announce(query)
         self.cursor.execute(query)
         return [InstrEntry.from_query_result(x) for x in self.cursor.fetchall()]
 
     def insert_nexus_structure(self, nexus_structure: NexusStructureEntry):
         command = nexus_structure.insert_sql_table(table_name=self.nexus_structures_table)
-        print(command)
+        self.announce(command)
         self.cursor.execute(command)
         self.db.commit()
 
@@ -61,11 +67,19 @@ class Database:
         return [NexusStructureEntry.from_query_result(x) for x in self.cursor.fetchall()]
 
     def insert_simulation_table(self, entry: SimulationTableEntry):
-        self.cursor.execute(entry.insert_sql_table(table_name=self.simulations_table))
+        command = entry.insert_sql_table(table_name=self.simulations_table)
+        self.announce(command)
+        self.cursor.execute(command)
         self.db.commit()
 
     def retrieve_simulation_table(self, primary_id: str) -> list[SimulationTableEntry]:
         self.cursor.execute(f"SELECT * FROM {self.simulations_table} WHERE id='{primary_id}'")
+        return [SimulationTableEntry.from_query_result(x) for x in self.cursor.fetchall()]
+
+    def query_simulation_table(self, entry: SimulationTableEntry, **kwargs) -> list[SimulationTableEntry]:
+        command = entry.query_simulation_tables(self.simulations_table, **kwargs)
+        self.announce(command)
+        self.cursor.execute(command)
         return [SimulationTableEntry.from_query_result(x) for x in self.cursor.fetchall()]
 
     # def insert_secondary_simulation_table(self, secondary_simulation: SecondaryInstrSimulationTable):
@@ -77,13 +91,16 @@ class Database:
     #     self.cursor.execute(f"SELECT * FROM {self.secondary_simulations_table} WHERE primary_id='{primary_id}' AND id='{secondary_id}'")
     #     return [SecondaryInstrSimulationTable.from_query_result(x) for x in self.cursor.fetchall()]
 
-    def _insert_simulation(self, sim, pars):
-        if not self.table_exists(sim.name):
-            self.cursor.execute(sim.create_simulation_sql_table())
+    def _insert_simulation(self, sim: SimulationTableEntry, pars: SimulationEntry):
+        if not self.table_exists(sim.table_name):
+            command = sim.create_simulation_sql_table()
+            self.announce(command)
+            self.cursor.execute(command)
             self.db.commit()
         command = sim.insert_simulation_sql_table(pars)
-        print(command)
+        self.announce(command)
         self.cursor.execute(command)
+        self.db.commit()
 
     def _retrieve_simulation(self, table: str, columns: list[str], pars: SimulationEntry) -> list[SimulationEntry]:
         self.cursor.execute(f"SELECT * FROM {table} WHERE {pars.between_query()}")
@@ -102,7 +119,7 @@ class Database:
         matches = self.retrieve_simulation_table(primary_id)
         if len(matches) != 1:
             raise RuntimeError(f"Expected exactly one match for id={primary_id}, got {matches}")
-        table = matches[0].name
+        table = matches[0].table_name
         columns = self.retrieve_column_names(table)
         return self._retrieve_simulation(table, columns, pars)
 

@@ -44,7 +44,8 @@ class RunParserTestCase(unittest.TestCase):
         self.assertRaises(ValueError, parse_scan_parameters, extra_parameters)
 
     def test_scan_points(self):
-        from mcbifrost.scan import parse_scan_parameters, parameters_to_scan
+        from mcbifrost.scan import parse_scan_parameters
+        from mcbifrost.range import parameters_to_scan
         args = self.parser.parse_args(['test.instr', 'secondary', 'a=1:3', 'b', '5:0.5:6', 'c=3'])
         ranges = parse_scan_parameters(args.parameters)
         names, points = parameters_to_scan(ranges)
@@ -52,7 +53,8 @@ class RunParserTestCase(unittest.TestCase):
         self.assertEqual(list(points), [(1, 5, 3), (2, 5.5, 3), (3, 6, 3)])
 
     def test_grid_scan_points(self):
-        from mcbifrost.scan import parse_scan_parameters, parameters_to_scan
+        from mcbifrost.scan import parse_scan_parameters
+        from mcbifrost.range import parameters_to_scan
         grid_parameters = ['a=1:3', 'b=1:4']
         grid_ranges = parse_scan_parameters(grid_parameters)
         self.assertRaises(ValueError, parameters_to_scan, grid_ranges)

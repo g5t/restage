@@ -70,34 +70,34 @@ def verify_table_parameters(table, parameters: dict):
     return table
 
 
-def cache_simulation_table(entry: InstrEntry, parameters: dict) -> SimulationTableEntry:
+def cache_simulation_table(entry: InstrEntry, row: SimulationEntry) -> SimulationTableEntry:
     query = DATABASE.retrieve_simulation_table(entry.id)
     if len(query) > 1:
         raise RuntimeError(f"Multiple entries for {entry.id} in {DATABASE.simulations_table}")
     elif len(query):
-        table = verify_table_parameters(query[0], parameters)
+        table = verify_table_parameters(query[0], row.parameter_values)
     else:
-        table = SimulationTableEntry(list(parameters.keys()), f'pst_{entry.id}', entry.id)
+        table = SimulationTableEntry(list(row.parameter_values.keys()), f'pst_{entry.id}', entry.id)
         DATABASE.insert_simulation_table(table)
     return table
 
 
-def cache_has_simulation(entry: InstrEntry, parameters: dict) -> bool:
-    table = cache_simulation_table(entry, parameters)
-    query = DATABASE.retrieve_simulation(table.id, SimulationEntry(parameters))
+def cache_has_simulation(entry: InstrEntry, row: SimulationEntry) -> bool:
+    table = cache_simulation_table(entry, row)
+    query = DATABASE.retrieve_simulation(table.id, row)
     return len(query) > 0
 
 
-def cache_get_simulation(entry: InstrEntry, parameters: dict) -> SimulationEntry:
-    table = cache_simulation_table(entry, parameters)
-    query = DATABASE.retrieve_simulation(table.id, SimulationEntry(parameters))
+def cache_get_simulation(entry: InstrEntry, row: SimulationEntry) -> SimulationEntry:
+    table = cache_simulation_table(entry, row)
+    query = DATABASE.retrieve_simulation(table.id, row)
     if len(query) != 1:
         raise RuntimeError(f"Expected 1 entry for {table.id} in {DATABASE.simulations_table}, got {len(query)}")
     return query[0]
 
 
 def cache_simulation(entry: InstrEntry, simulation: SimulationEntry):
-    table = cache_simulation_table(entry, simulation.parameter_values)
+    table = cache_simulation_table(entry, simulation)
     DATABASE.insert_simulation(table, simulation)
 
 

@@ -148,3 +148,29 @@ def parameters_to_scan(parameters: dict[str, Union[list, MRange]], grid: bool = 
                 others = ', '.join(others)
                 raise ValueError(f'Parameter {names[i]} has {len(v)} values, but {par} {others} {have} {n_max}')
         return names, zip(*[v if len(v) > 1 else Singular(v[0], n_max) for v in values])
+
+
+def _MRange_or_Singular(s: str):
+    if ':' in s:
+        return MRange.from_str(s)
+    return Singular.from_str(s)
+
+
+def parse_command_line_parameters(unparsed: list[str]) -> dict[str, Union[Singular, MRange]]:
+    """Parse a list of input parameters into a dictionary of MRange objects.
+
+    :parameter unparsed: A list of parameters.
+    """
+    ranges = {}
+    index = 0
+    while index < len(unparsed):
+        if '=' in unparsed[index]:
+            k, v = unparsed[index].split('=', 1)
+            ranges[k.lower()] = _MRange_or_Singular(v)
+        elif index + 1 < len(unparsed) and '=' not in unparsed[index + 1]:
+            ranges[unparsed[index].lower()] = _MRange_or_Singular(unparsed[index + 1])
+            index += 1
+        else:
+            raise ValueError(f'Invalid parameter: {unparsed[index]}')
+        index += 1
+    return ranges
