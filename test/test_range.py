@@ -1,5 +1,5 @@
 import unittest
-from mcbifrost.range import MRange, Singular
+from restage.range import MRange, Singular
 
 
 class MRangeTestCase(unittest.TestCase):

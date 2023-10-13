@@ -1,12 +1,12 @@
 import unittest
-from mcbifrost.database import Database
+from restage.database import Database
 
 
 class MyTestCase(unittest.TestCase):
 
     def setUp(self):
         from platformdirs import user_runtime_path
-        self.db_file = user_runtime_path('mcbifrost', 'ess', ensure_exists=True).joinpath('test_database.db')
+        self.db_file = user_runtime_path('restage', 'ess', ensure_exists=True).joinpath('test_database.db')
         from pathlib import Path
         self.db_file = Path().joinpath('test_database.db')
         self.db = Database(self.db_file)
@@ -34,7 +34,7 @@ class MyTestCase(unittest.TestCase):
             self.assertEqual(getattr(obj, k), v)
 
     def test_instr_file(self):
-        from mcbifrost import InstrEntry
+        from restage import InstrEntry
         file_contents = 'fake file contents'
         binary_path = '/not/a/real/binary/path'
         mccode_version = 'version'
@@ -47,7 +47,7 @@ class MyTestCase(unittest.TestCase):
                                                    'binary_path': binary_path, 'mccode_version': mccode_version})
 
     def test_nexus_structure(self):
-        from mcbifrost import NexusStructureEntry
+        from restage import NexusStructureEntry
         instr_id = 'fake instr id'
         json_contents = 'fake json contents'
         eniius_version = 'fake eniius version'
@@ -59,7 +59,7 @@ class MyTestCase(unittest.TestCase):
                            'eniius_version': eniius_version})
 
     def test_simulation_table(self):
-        from mcbifrost import SimulationTableEntry
+        from restage import SimulationTableEntry
         instr_id = 'fake instr id'
         name = 'super_instr_1'
         parameters = ['par1', 'par2', 'par3', 'par4']
@@ -70,7 +70,7 @@ class MyTestCase(unittest.TestCase):
                                                              'parameters': parameters})
 
     def test_simulation(self):
-        from mcbifrost import SimulationTableEntry, SimulationEntry
+        from restage import SimulationTableEntry, SimulationEntry
         from mccode.common import Value
         name = 'super_instr_2'
         parameters = ['par1', 'par2', 'par3', 'par4']

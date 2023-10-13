@@ -1,6 +1,5 @@
 from .tables import (SimulationEntry,
                      SimulationTableEntry,
-                     # SecondaryInstrSimulationTable,
                      NexusStructureEntry,
                      InstrEntry
                      )
@@ -10,7 +9,6 @@ from .cache import DATABASE
 __all__ = [
     'SimulationEntry',
     'SimulationTableEntry',
-    # 'SecondaryInstrSimulationTable',
     'NexusStructureEntry',
     'InstrEntry',
     'Database',

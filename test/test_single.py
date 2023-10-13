@@ -3,8 +3,8 @@ import unittest
 
 class SingleTestCase(unittest.TestCase):
     def setUp(self):
-        from mcbifrost.single import make_single_parser
-        self.parser = make_single_parser()
+        from restage.splitrun import make_splitrun_parser
+        self.parser = make_splitrun_parser()
 
     def test_parsing(self):
         args = self.parser.parse_args(['test.instr', 'a=1', 'b=2', '--split-at=here', '-m'])
@@ -49,11 +49,11 @@ class SingleTestCase(unittest.TestCase):
         self.assertEqual(args.format, ['RAW'])
 
     def test_parameters(self):
-        from mcbifrost.single import parse_single_parameters
-        from mcbifrost.range import MRange, Singular, parameters_to_scan
+        from restage.splitrun import parse_splitrun_parameters
+        from restage.range import MRange, Singular, parameters_to_scan
         args = self.parser.parse_args(['test.instr', 'a=1.0', 'b=2', 'c=3:5', 'd=blah', 'e=/data', '-m'])
         self.assertEqual(args.parameters, ['a=1.0', 'b=2', 'c=3:5', 'd=blah', 'e=/data'])
-        parameters = parse_single_parameters(args.parameters)
+        parameters = parse_splitrun_parameters(args.parameters)
         self.assertTrue(isinstance(parameters['a'], Singular))
         self.assertTrue(isinstance(parameters['b'], Singular))
         self.assertTrue(isinstance(parameters['c'], MRange))

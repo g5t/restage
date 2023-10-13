@@ -40,6 +40,7 @@ class SimulationEntry:
         return cls(pv, seed=q_seed, ncount=q_ncount, output_path=q_path, gravitation=q_gravitation, id=q_id)
 
     def __post_init__(self):
+        from zenlog import log
         for k, v in self.parameter_values.items():
             if not isinstance(v, Value):
                 self.parameter_values[k] = Value.best(v)
@@ -49,9 +50,15 @@ class SimulationEntry:
                 # Find the best matching precision, e.g., k='ps1speed' would select 'speed' from ('speed', 'phase', ...)
                 best = [p for p in self.precision.keys() if p in k]
                 if len(best) > 1:
-                    from zenlog import log
-                    log.info(f"Multiple precision matches for {k}: {best}")
-                self.precision[k] = self.precision[best[0]] if len(best) else self.parameter_values[k].value / 10000
+                    log.info(f"SimulationEntry.__post_init__:: Multiple precision matches for {k}: {best}")
+                if len(best):
+                    self.precision[k] = self.precision[best[0]]
+                elif self.parameter_values[k].has_value:
+                    self.precision[k] = self.parameter_values[k].value / 10000
+                else:
+                    log.info(f'SimulationEntry.__post_init__:: No precision match for value-less {k}, using 0.1;'
+                             ' consider specifying precision dict during initialization')
+                    self.precision[k] = 0.1
 
     def __hash__(self):
         return hash((tuple(self.parameter_values.values()), self.seed, self.ncount, self.gravitation))
@@ -109,6 +116,49 @@ class SimulationEntry:
         """Construct a SQL table definition for the primary parameters"""
         # these column names _must_ match the names in TableParameters make_sql_insert
         return f"CREATE TABLE {table_name} ({', '.join(self.columns())})"
+
+    def parameter_distance(self, other):
+        if not isinstance(other, SimulationEntry):
+            raise RuntimeError(f"Cannot compare {self} to {other}")
+        if self.parameter_values.keys() != other.parameter_values.keys():
+            raise RuntimeError(f"Cannot compare {self} to {other}")
+        total = 0
+        for k in self.parameter_values.keys():
+            if self.parameter_values[k].is_float or self.parameter_values[k].is_int:
+                total += abs(self.parameter_values[k].value - other.parameter_values[k].value)
+            elif self.parameter_values[k] != other.parameter_values[k]:
+                total += 10 * len(self.parameter_values)
+        return total
+
+
+def best_simulation_entry_match_index(candidates: list[SimulationEntry], pivot: SimulationEntry):
+    # There are many reasons a query could have returned multiple matches.
+    #   there could be multiple points repeated within the uncertainty we used to select the primary simulation
+    #   the same simulation could be repeated with different seed values, and we haven't specified a seed here
+    #   the same simulation could be repeated with different particle counts, as no ncount was specified here
+    #   the same simulation could be repeated with and without gravity, and that flag is not specified here?
+    # select the best one:
+    #   1. check for difference between simulated and requested parameters and sort by that
+    #   2. if any are the same, pick the one with the most particles (maybe we can sample from it if fewer are needed?)
+    #   ... come up with some heuristic for picking the best seed?
+    if len(candidates) < 2:
+        return 0
+    # sort the candidate indexes by parameter-distance from the pivot
+    distances = [c.parameter_distance(pivot) for c in candidates]
+    indexes = sorted(range(len(candidates)), key=lambda index: distances[index])
+    # if there are multiple candidates with the same distance, pick the one with the most particles
+    last_distance = distances[indexes[0]]
+    best = 0
+    for i in indexes[1:]:
+        if distances[i] != last_distance:
+            break
+        if (candidates[i].ncount or 0) > (candidates[best].ncount or 0):
+            best = i
+    return indexes[best]
+
+
+def best_simulation_entry_match(candidates: list[SimulationEntry], pivot: SimulationEntry):
+    return candidates[best_simulation_entry_match_index(candidates, pivot)]
 
 
 @dataclass

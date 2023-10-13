@@ -82,15 +82,6 @@ class Database:
         self.cursor.execute(command)
         return [SimulationTableEntry.from_query_result(x) for x in self.cursor.fetchall()]
 
-    # def insert_secondary_simulation_table(self, secondary_simulation: SecondaryInstrSimulationTable):
-    #     command = secondary_simulation.insert_sql_table(table_name=self.secondary_simulations_table)
-    #     self.cursor.execute(command)
-    #     self.db.commit()
-    #
-    # def retrieve_secondary_simulation_table(self, primary_id: str, secondary_id: str) -> list[SecondaryInstrSimulationTable]:
-    #     self.cursor.execute(f"SELECT * FROM {self.secondary_simulations_table} WHERE primary_id='{primary_id}' AND id='{secondary_id}'")
-    #     return [SecondaryInstrSimulationTable.from_query_result(x) for x in self.cursor.fetchall()]
-
     def _insert_simulation(self, sim: SimulationTableEntry, pars: SimulationEntry):
         if not self.table_exists(sim.table_name):
             command = sim.create_simulation_sql_table()
@@ -122,18 +113,3 @@ class Database:
         table = matches[0].table_name
         columns = self.retrieve_column_names(table)
         return self._retrieve_simulation(table, columns, pars)
-
-    # def insert_secondary_simulation(self, secondary_simulation: SecondaryInstrSimulationTable,
-    #                                 simulation_parameters: SimulationTableParameters):
-    #     if len(self.retrieve_secondary_simulation_table(secondary_simulation.primary_id, secondary_simulation.id)) == 0:
-    #         self.insert_secondary_simulation_table(secondary_simulation)
-    #     self._insert_simulation(secondary_simulation, simulation_parameters)
-    #
-    # def retrieve_secondary_simulation(self, primary_id: str, secondary_id: str, pars: SimulationTableParameters) -> list[SimulationTableParameters]:
-    #     matches = self.retrieve_secondary_simulation_table(primary_id, secondary_id)
-    #     if len(matches) != 1:
-    #         raise RuntimeError(f"Expected exactly one match for primary_id={primary_id}, secondary_id={secondary_id}, got {matches}")
-    #     table = matches[0].name
-    #     columns = self.retrieve_column_names(table)
-    #     return self._retrieve_simulation(table, columns, pars)
-    #

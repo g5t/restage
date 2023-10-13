@@ -5,7 +5,7 @@ from .tables import InstrEntry, SimulationTableEntry, SimulationEntry
 def setup_database(named: str):
     from platformdirs import user_cache_path
     from .database import Database
-    db_file = user_cache_path('mcbifrost', 'ess', ensure_exists=True).joinpath(f'{named}.db')
+    db_file = user_cache_path('restage', 'ess', ensure_exists=True).joinpath(f'{named}.db')
     db = Database(db_file)
     return db
 
@@ -16,7 +16,7 @@ DATABASE = setup_database('database')
 
 def module_data_path(sub: str):
     from platformdirs import user_data_path
-    path = user_data_path('mcbifrost', 'ess').joinpath(sub)
+    path = user_data_path('restage', 'ess').joinpath(sub)
     if not path.exists():
         path.mkdir(parents=True)
     return path
@@ -88,37 +88,14 @@ def cache_has_simulation(entry: InstrEntry, row: SimulationEntry) -> bool:
     return len(query) > 0
 
 
-def cache_get_simulation(entry: InstrEntry, row: SimulationEntry) -> SimulationEntry:
+def cache_get_simulation(entry: InstrEntry, row: SimulationEntry) -> list[SimulationEntry]:
     table = cache_simulation_table(entry, row)
     query = DATABASE.retrieve_simulation(table.id, row)
-    if len(query) != 1:
-        raise RuntimeError(f"Expected 1 entry for {table.id} in {DATABASE.simulations_table}, got {len(query)}")
-    return query[0]
+    if len(query) == 0:
+        raise RuntimeError(f"Expected 1 or more entry for {table.id} in {DATABASE.simulations_table}, got none")
+    return query
 
 
 def cache_simulation(entry: InstrEntry, simulation: SimulationEntry):
     table = cache_simulation_table(entry, simulation)
     DATABASE.insert_simulation(table, simulation)
-
-
-# def cache_secondary_simulation_table(entry: InstrTableEntry, primary_id: str, parameters: dict) -> SecondaryInstrSimulationTable:
-#     query = DATABASE.retrieve_secondary_simulation_table(primary_id, entry.id)
-#     if len(query) > 1:
-#         raise RuntimeError(f"Multiple entries for {primary_id} and {entry.id} in {DATABASE.secondary_simulations_table}")
-#     elif len(query):
-#         table = verify_table_parameters(query[0], parameters)
-#     else:
-#         table = SecondaryInstrSimulationTable(list(parameters.keys()), f'sst_{entry.id}', entry.id, primary_id)
-#         DATABASE.insert_secondary_simulation_table(table)
-#     return table
-#
-#
-# def cache_has_secondary_simulation(entry: InstrTableEntry, primary_id: str, parameters: dict) -> bool:
-#     table = cache_secondary_simulation_table(entry, primary_id, parameters)
-#     query = DATABASE.retrieve_simulation(table.name, table.parameters, SimulationTableParameters(parameters))
-#     return len(query) > 0
-#
-#
-# def cache_secondary_simulation(entry: InstrTableEntry, primary_id: str, simulation: SimulationTableParameters):
-#     table = cache_secondary_simulation_table(entry, primary_id, simulation.parameter_values)
-#     DATABASE.insert_secondary_simulation(table, simulation)

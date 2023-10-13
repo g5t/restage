@@ -3,7 +3,7 @@ requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mcbifrost"
+name = "restage"
 dependencies = [
     'zenlog==1.1,',
     'platformdirs==3.11',
@@ -14,6 +14,6 @@ dynamic = ["version"]
 
 [project.scripts]
 mcbifrost_run = "mcbifrost.run:entrypoint"
-mcbifrost_single = "mcbifrost.single:entrypoint"
+splitrun = "mcbifrost.splitrun:entrypoint"
 
 [tool.setuptools_scm]
