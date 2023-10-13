@@ -13,7 +13,7 @@ dependencies = [
 dynamic = ["version"]
 
 [project.scripts]
-mcbifrost_run = "mcbifrost.run:entrypoint"
-splitrun = "mcbifrost.splitrun:entrypoint"
+restage = "restage.run:entrypoint"
+splitrun = "restage.splitrun:entrypoint"
 
 [tool.setuptools_scm]
