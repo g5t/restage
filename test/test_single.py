@@ -73,5 +73,82 @@ class SingleTestCase(unittest.TestCase):
             self.assertEqual(values[4], '/data')
 
 
+class DictWranglingTestCase(unittest.TestCase):
+    def test_regularization(self):
+        from restage.splitrun import regular_mccode_runtime_dict
+        short_names = dict(s=1, n=2, d=3, t=4, g=5, bufsiz=6, format=7)
+        long_names = dict(seed=1, ncount=2, dir=3, trace=4, gravitation=5, bufsiz=6, format=7)
+        self.assertEqual(regular_mccode_runtime_dict(short_names), long_names)
+
+
+class SplitRunTestCase(unittest.TestCase):
+    def setUp(self) -> None:
+        from pathlib import Path
+        from tempfile import mkdtemp
+        from math import pi, asin, sqrt
+        from mccode.loader import parse_mcstas_instr
+        d_spacing = 3.355  # (002) for Highly-ordered Pyrolytic Graphite
+        mean_energy = 5.0
+        energy_width = 0.1
+        mean_ki = sqrt(mean_energy / 2.7022)
+        min_ki = sqrt((mean_energy - energy_width) / 2.7022)
+        max_ki = sqrt((mean_energy + energy_width) / 2.7022)
+        instr = f"""
+        DEFINE INSTRUMENT splitRunTest(a1=0, a2=0, virtual_source_x=0.05, virtual_source_y=0.1)
+        TRACE
+        COMPONENT origin = Arm() AT (0, 0, 0) ABSOLUTE
+        COMPONENT source = Source_simple(yheight=0.25, xwidth=0.2, dist=1.5, focus_xw=0.06, focus_yh=0.12,
+                                         E0={mean_energy}, dE={energy_width})
+                           AT (0, 0, 0) RELATIVE origin
+        COMPONENT guide = Guide_gravity(w1 = 0.06, h1 = 0.12, w2 = 0.05, h2 = 0.1, l = 30, m = 4) 
+                          AT (0, 0, 1.5) RELATIVE  PREVIOUS
+        COMPONENT guide_end = Arm() AT (0, 0, 30) RELATIVE PREVIOUS
+        COMPONENT aperture = Slit(xwidth=virtual_source_x, yheight=virtual_source_y) AT (0, 0, 0.01) RELATIVE PREVIOUS
+        COMPONENT split_at = Arm() AT (0, 0, 0.0001) RELATIVE PREVIOUS
+        COMPONENT mono_point = Arm() AT (0, 0, 0.8) RELATIVE split_at
+        COMPONENT mono = Monochromator_curved(zwidth = 0.02, yheight = 0.02, NH = 13, NV = 7, DM={d_spacing}) 
+                         AT (0, 0, 0) RELATIVE  mono_point ROTATED (0, a1, 0) RELATIVE mono_point
+        COMPONENT sample_arm = Arm() AT (0, 0, 0) RELATIVE mono_point ROTATED (0, a2, 0) RELATIVE mono_point
+        COMPONENT detector = Monitor(xwidth=0.01, yheight=0.05) AT (0, 0, 0.8) RELATIVE sample_arm
+        END
+        """
+        self.instr = parse_mcstas_instr(instr)
+        self.dir = Path(mkdtemp())
+        self.mean_a1 = asin(pi / d_spacing / mean_ki) * 180 / pi
+        self.min_a1 = asin(pi / d_spacing / max_ki) * 180 / pi
+        self.max_a1 = asin(pi / d_spacing / min_ki) * 180 / pi
+
+    def tearDown(self) -> None:
+        if self.dir.exists():
+            self.dir.rmdir()
+
+    def test_simple_scan(self):
+        # Scanning a1 and a2 with a2=2*a1 should produce approximately the same intensity for all points
+        # as long as a1 is between the limits of min_a1 and max_a1
+        from restage.splitrun import parse_splitrun_parameters, splitrun
+        # for a 5 cm wide guide and 1 cm wide detector, a total of 1.6 m from each other,
+        # the detector would be in the direct beam for any positive angle theta that satisfies
+        #  1.6 sin(theta) - 0.005 cos(theta) <= 0.025
+        # which is, approximately 0.9 degrees. We do not want to include the direct beam in the scan,
+        # so we will use a minimum a2 of 6 degrees to be safe
+        scan = parse_splitrun_parameters(['a1=3:3:90', 'a2=6:6:180'])
+
+        # The way that McCode handles directories is extremely finicky. If the _actual_ simulation directory
+        # exists, the simulation will fail (even if it is empty!), but if the _parent_ directory does not exist,
+        # the simulation will fail. So we need to create the parent directory, but not the simulation directory.
+        # The real trick is that the simulation directory is a subdirectory of the one specified here.
+        output = self.dir.joinpath('test_simple_scan')
+        if not output.exists():
+            output.mkdir(parents=True)
+
+        # run the scan
+        splitrun(self.instr, scan, split_at='split_at', grid=False, ncount=10_000, dir=output)
+
+        # check the scan directory for output
+        for x in self.dir.glob('*'):
+            print(x)
+
+
+
 if __name__ == '__main__':
     unittest.main()

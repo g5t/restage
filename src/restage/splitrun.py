@@ -32,14 +32,14 @@ def make_splitrun_parser():
     return parser
 
 
-def get_best_of(src, names: tuple):
+def get_best_of(src: dict, names: tuple):
     for name in names:
         if name in src:
-            return name
+            return src[name]
     raise RuntimeError(f"None of {names} found in {src}")
 
 
-def insert_best_of(src, snk, names: tuple):
+def insert_best_of(src: dict, snk: dict, names: tuple):
     if any(x in src for x in names):
         snk[names[0]] = get_best_of(src, names)
     return snk
@@ -131,8 +131,8 @@ def splitrun(instr, parameters, split_at=None, grid=False, **runtime_arguments):
     # splitting defines an instrument parameter in both returned instrument, 'mcpl_filename'.
     pre, post = instr.mcpl_split(split_at, remove_unused_parameters=True)
     # ... reduce the parameters to those that are relevant to the two instruments.
-    pre_parameters = {k: v for k, v in parameters.items() if k in pre.has_parameter(k)}
-    post_parameters = {k: v for k, v in parameters.items() if k in post.has_parameter(k)}
+    pre_parameters = {k: v for k, v in parameters.items() if pre.has_parameter(k)}
+    post_parameters = {k: v for k, v in parameters.items() if post.has_parameter(k)}
 
     pre_entry = splitrun_pre(pre, pre_parameters, grid, **runtime_arguments,)
     splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, grid, **runtime_arguments)
@@ -140,50 +140,72 @@ def splitrun(instr, parameters, split_at=None, grid=False, **runtime_arguments):
 
 def splitrun_pre(instr, parameters, grid, **runtime_arguments):
     from .cache import cache_instr, cache_has_simulation, cache_simulation
-    from .energy import energy_to_chopper_parameters
+    from .energy import get_energy_to_chopper_translator
     from .range import parameters_to_scan
     from .instr import collect_parameter_dict
     # check if this instr is already represented in the module's cache database
     # if not, it is compiled and added to the cache with (hopefully sensible) defaults specified
     entry = cache_instr(instr)
-    names, scan = parameters_to_scan(energy_to_chopper_parameters(parameters, grid=grid), grid=grid)
+    energy_to_chopper_parameters = get_energy_to_chopper_translator(instr.name)
+    n_pts, names, scan = parameters_to_scan(energy_to_chopper_parameters(parameters, grid=grid), grid=grid)
     args = regular_mccode_runtime_dict(runtime_arguments)
+    sit_kw = {'seed': args.get('seed'), 'ncount': args.get('ncount'), 'gravitation': args.get('gravitation', False)}
+    if n_pts == 0:
+        # no scan required, ensure the 'all-defaults' simulation entry is cached
+        sit = SimulationEntry(collect_parameter_dict(instr, {}), **sit_kw)
+        if not cache_has_simulation(entry, sit):
+            sit.output_path = do_primary_simulation(sit, entry, parameters, args)
+            cache_simulation(entry, sit)
     for values in scan:
         nv = {n: v for n, v in zip(names, values)}
-        # TODO expand nv to include all instrument parameters, even those set to their defaults?
-        #   we also have access to the mccode.instr.expression.Value for each instr parameter, so can set it here
-        sit = SimulationEntry(collect_parameter_dict(instr, nv), seed=args.get('seed'), ncount=args.get('ncount'),
-                              gravitation=args.get('gravitation', False))
+        sit = SimulationEntry(collect_parameter_dict(instr, nv), **sit_kw)
         if not cache_has_simulation(entry, sit):
             sit.output_path = do_primary_simulation(sit, entry, nv, args)
             cache_simulation(entry, sit)
     return entry
 
 
-def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, grid, **runtime_arguments):
+def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, grid, summary=True, **runtime_arguments):
     from .cache import cache_instr, cache_get_simulation
-    from .energy import energy_to_chopper_parameters
+    from .energy import get_energy_to_chopper_translator
     from .range import parameters_to_scan
     from .instr import collect_parameter_dict
     from .tables import best_simulation_entry_match
+    from .emulate import mccode_sim_io, mccode_dat_io, extend_mccode_dat_io
     instr_entry = cache_instr(post)
     args = regular_mccode_runtime_dict(runtime_arguments)
+    sit_kw = {'seed': args.get('seed'), 'ncount': args.get('ncount'), 'gravitation': args.get('gravitation', False)}
     # recombine the parameters to ensure the 'correct' scan is performed
     # TODO the order of a mesh scan may not be preserved here - is this a problem?
     parameters = {**pre_parameters, **post_parameters}
-    names, scan = parameters_to_scan(energy_to_chopper_parameters(parameters, grid=grid), grid=grid)
-    for values in scan:
+    energy_to_chopper_parameters = get_energy_to_chopper_translator(post.name)
+    n_pts, names, scan = parameters_to_scan(energy_to_chopper_parameters(parameters, grid=grid), grid=grid)
+    n_zeros = len(str(n_pts))  # we could use math.log10(n_pts) + 1, but why not use a hacky solution?
+
+    sim_contents = mccode_sim_io(post, parameters, args)
+    dat_contents = mccode_dat_io(post, parameters, args)
+
+    for number, values in enumerate(scan):
         pars = {n: v for n, v in zip(names, values)}
         # parameters for the secondary instrument:
         secondary_pars = {k: v for k, v in pars.items() if k in post_parameters}
         # use the parameters for the primary instrument to construct a (partial) simulation entry for matching
         table_parameters = collect_parameter_dict(pre, {k: v for k, v in pars.items() if k in pre_parameters})
-        primary_sent = SimulationEntry(table_parameters, seed=args.get('seed'), ncount=args.get('ncount'),
-                                       gravitation=args.get('gravitation', False))
+        primary_sent = SimulationEntry(table_parameters, **sit_kw)
         # and use it to retrieve the already-simulated primary instrument details:
         sim_entry = best_simulation_entry_match(cache_get_simulation(pre_entry, primary_sent), primary_sent)
         # now we can use the best primary simulation entry to perform the secondary simulation
+        # but because McCode refuses to use a specified output directory if it is not empty,
+        # we need to update the runtime_arguments first!
+        runtime_arguments['dir'] = args["dir"].joinpath(str(number).zfill(n_zeros))
         do_secondary_simulation(sim_entry, instr_entry, secondary_pars, runtime_arguments)
+        extend_mccode_dat_io(dat_contents, runtime_arguments['dir'], secondary_pars)
+
+    if summary:
+        with args['dir'].joinpath('mccode.sim').open('w') as f:
+            f.write(sim_contents.getvalue())
+        with args['dir'].joinpath('mccode.dat').open('w') as f:
+            f.write(dat_contents.getvalue())
 
 
 def do_primary_simulation(sit: SimulationEntry,

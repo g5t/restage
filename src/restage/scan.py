@@ -37,13 +37,13 @@ def run_point(args, parameters):
 
 def entrypoint():
     """Entrypoint for the mcbifrost_run command."""
-    from .energy import energy_to_chopper_parameters
+    from .energy import bifrost_energy_to_chopper_parameters
     from .range import parameters_to_scan
     args, parameters = parse_scan()
-    parameters = energy_to_chopper_parameters(parameters)
-    names, scan = parameters_to_scan(parameters)
+    parameters = bifrost_energy_to_chopper_parameters(parameters)
+    n_points, names, scan = parameters_to_scan(parameters)
     print('Now running mcbifrost_run')
     for i, p in enumerate(scan):
         point_parameters = {k: v for k, v in zip(names, p)}
-        print(f'Point {i}:')
+        print(f'Point {i} of {n_points}:')
         run_point(args, point_parameters)

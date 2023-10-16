@@ -133,10 +133,14 @@ def parameters_to_scan(parameters: dict[str, Union[list, MRange]], grid: bool = 
     """
     names = [x.lower() for x in parameters.keys()]
     values = [x if hasattr(x, '__iter__') else [x] for x in parameters.values()]
-    if grid:
+    if not len(values):
+        return 0, names, []
+    elif grid:
         from itertools import product
+        from math import prod
         # singular MRange objects *should* stop the grid along their axis:
-        return names, product(*values)
+        n_pts = prod([len(v) for v in values])
+        return n_pts, names, product(*values)
     else:
         # replace singular MRange entries with Singular iterators, to avoid stopping the zip early:
         n_max = max([len(v) for v in values])
@@ -147,7 +151,7 @@ def parameters_to_scan(parameters: dict[str, Union[list, MRange]], grid: bool = 
                 have = 'have' if len(others) > 1 else 'has'
                 others = ', '.join(others)
                 raise ValueError(f'Parameter {names[i]} has {len(v)} values, but {par} {others} {have} {n_max}')
-        return names, zip(*[v if len(v) > 1 else Singular(v[0], n_max) for v in values])
+        return n_max, names, zip(*[v if len(v) > 1 else Singular(v[0], n_max) for v in values])
 
 
 def _MRange_or_Singular(s: str):

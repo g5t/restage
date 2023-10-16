@@ -14,6 +14,7 @@ from .tables import (SimulationEntry,
 from .database import Database
 from .cache import DATABASE
 
+
 try:
     __version__ = importlib_metadata.version(__name__)
 except importlib_metadata.PackageNotFoundError:

@@ -39,6 +39,10 @@ class Database:
         self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
         return len(self.cursor.fetchall()) > 0
 
+    def check_table_exists(self, table_name: str):
+        if not self.table_exists(table_name):
+            raise RuntimeError(f"Table {table_name} does not exist")
+
     def insert_instr_file(self, instr_file: InstrEntry):
         command = instr_file.insert_sql_table(table_name=self.instr_file_table)
         self.announce(command)
@@ -70,6 +74,11 @@ class Database:
         command = entry.insert_sql_table(table_name=self.simulations_table)
         self.announce(command)
         self.cursor.execute(command)
+        # if we had to create the table _entry_ we need to create the table too!
+        if not self.table_exists(entry.table_name):
+            command = entry.create_simulation_sql_table()
+            self.announce(command)
+            self.cursor.execute(command)
         self.db.commit()
 
     def retrieve_simulation_table(self, primary_id: str) -> list[SimulationTableEntry]:
@@ -87,17 +96,18 @@ class Database:
             command = sim.create_simulation_sql_table()
             self.announce(command)
             self.cursor.execute(command)
-            self.db.commit()
         command = sim.insert_simulation_sql_table(pars)
         self.announce(command)
         self.cursor.execute(command)
         self.db.commit()
 
     def _retrieve_simulation(self, table: str, columns: list[str], pars: SimulationEntry) -> list[SimulationEntry]:
+        self.check_table_exists(table)
         self.cursor.execute(f"SELECT * FROM {table} WHERE {pars.between_query()}")
         return [SimulationEntry.from_query_result(columns, x) for x in self.cursor.fetchall()]
 
     def retrieve_column_names(self, table_name: str):
+        self.check_table_exists(table_name)
         self.cursor.execute(f"SELECT c.name FROM pragma_table_info('{table_name}') c")
         return [x[0] for x in self.cursor.fetchall()]
 
