@@ -9,7 +9,6 @@ def setup_database(named: str):
     db = Database(db_file)
     return db
 
-
 # Create the global database object in the module namespace.
 DATABASE = setup_database('database')
 
@@ -99,3 +98,80 @@ def cache_get_simulation(entry: InstrEntry, row: SimulationEntry) -> list[Simula
 def cache_simulation(entry: InstrEntry, simulation: SimulationEntry):
     table = cache_simulation_table(entry, simulation)
     DATABASE.insert_simulation(table, simulation)
+
+
+def _cleanup_instr_table(allow_different=True):
+    """Look through the cache tables and remove any entries which are no longer valid"""
+    from pathlib import Path
+    from mccode import __version__
+    entries = DATABASE.all_instr_files()
+    for entry in entries:
+        if not entry.binary_path or not Path(entry.binary_path).exists():
+            DATABASE.delete_instr_file(entry.id)
+        elif allow_different and entry.mccode_version != __version__:
+            DATABASE.delete_instr_file(entry.id)
+            # plus remove the binary
+            Path(entry.binary_path).unlink()
+            # and its directory if it is empty (it's _probably_ empty, but we should make sure)
+            if not any(Path(entry.binary_path).parent.iterdir()):
+                Path(entry.binary_path).parent.rmdir()
+
+
+def _cleanup_simulations_table(keep_empty=False, allow_different=False, cleanup_directories=False):
+    """Look through the cached table listing simulation tables and remove any entries which are no longer valid"""
+    from pathlib import Path
+    for entry in DATABASE.retrieve_all_simulation_tables():
+        if not DATABASE.table_exists(entry.table_name):
+            DATABASE.delete_simulation_table(entry.id)
+            continue
+
+        # clean up the entries of the table
+        _cleanup_simulations(entry.id, keep_empty=keep_empty, cleanup_directories=cleanup_directories)
+        # and remove the table if it is empty
+        if not (keep_empty or len(DATABASE.retrieve_all_simulations(entry.id))):
+            DATABASE.delete_simulation_table(entry.id)
+            continue
+
+        # check that the column names all match
+        if not (allow_different or DATABASE.table_has_columns(entry.table_name, entry.parameters)):
+            # Remove the simulation output folders for each tabulated simulation:
+            if cleanup_directories:
+                for sim in DATABASE.retrieve_all_simulations(entry.id):
+                    sim_path = Path(sim.output_path)
+                    for item in sim_path.iterdir():
+                        item.unlink()
+                    sim_path.rmdir()
+            DATABASE.delete_simulation_table(entry.id)
+
+
+def _cleanup_nexus_table():
+    # TODO implement this`
+    pass
+
+
+def _cleanup_simulations(primary_id: str, keep_empty=False, cleanup_directories=False):
+    """Look through a cached simulations table's entries and remove any which are no longer valid"""
+    from pathlib import Path
+    entries = DATABASE.retrieve_all_simulations(primary_id)
+    for entry in entries:
+        # Does the table reference a missing simulation output directory?
+        if not Path(entry.output_path).exists():
+            DATABASE.delete_simulation(primary_id, entry.id)
+        # or an empty one?
+        elif not keep_empty and not any(Path(entry.output_path).iterdir()):
+            if cleanup_directories:
+                Path(entry.output_path).rmdir()
+            DATABASE.delete_simulation(primary_id, entry.id)
+        # TODO add a lifetime to check against?
+
+
+def cache_cleanup(keep_empty=False, allow_different=False, cleanup_directories=False):
+    _cleanup_instr_table(allow_different=allow_different)
+    _cleanup_nexus_table()
+    _cleanup_simulations_table(keep_empty=keep_empty, allow_different=allow_different,
+                               cleanup_directories=cleanup_directories)
+
+
+# FIXME auto cleanup is removing cached table entries incorrectly at the moment
+# # automatically clean up the cache when the module is loaded
+# cache_cleanup()

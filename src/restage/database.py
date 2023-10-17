@@ -60,6 +60,14 @@ class Database:
         self.cursor.execute(query)
         return [InstrEntry.from_query_result(x) for x in self.cursor.fetchall()]
 
+    def all_instr_files(self) -> list[InstrEntry]:
+        self.cursor.execute(f"SELECT * FROM {self.instr_file_table}")
+        return [InstrEntry.from_query_result(x) for x in self.cursor.fetchall()]
+
+    def delete_instr_file(self, instr_id: str):
+        self.cursor.execute(f"DELETE FROM {self.instr_file_table} WHERE id='{instr_id}'")
+        self.db.commit()
+
     def insert_nexus_structure(self, nexus_structure: NexusStructureEntry):
         command = nexus_structure.insert_sql_table(table_name=self.nexus_structures_table)
         self.announce(command)
@@ -84,6 +92,19 @@ class Database:
     def retrieve_simulation_table(self, primary_id: str) -> list[SimulationTableEntry]:
         self.cursor.execute(f"SELECT * FROM {self.simulations_table} WHERE id='{primary_id}'")
         return [SimulationTableEntry.from_query_result(x) for x in self.cursor.fetchall()]
+
+    def retrieve_all_simulation_tables(self) -> list[SimulationTableEntry]:
+        self.cursor.execute(f"SELECT * FROM {self.simulations_table}")
+        return [SimulationTableEntry.from_query_result(x) for x in self.cursor.fetchall()]
+
+    def delete_simulation_table(self, primary_id: str):
+        matches = self.retrieve_simulation_table(primary_id)
+        if len(matches) != 1:
+            raise RuntimeError(f"Expected exactly one match for id={primary_id}, got {matches}")
+        table_name = matches[0].table_name
+        self.cursor.execute(f"DELETE FROM {self.simulations_table} WHERE id='{primary_id}'")
+        self.cursor.execute(f"DROP TABLE {table_name}")
+        self.db.commit()
 
     def query_simulation_table(self, entry: SimulationTableEntry, **kwargs) -> list[SimulationTableEntry]:
         command = entry.query_simulation_tables(self.simulations_table, **kwargs)
@@ -123,3 +144,26 @@ class Database:
         table = matches[0].table_name
         columns = self.retrieve_column_names(table)
         return self._retrieve_simulation(table, columns, pars)
+
+    def delete_simulation(self, primary_id: str, simulation_id: str):
+        matches = self.retrieve_simulation_table(primary_id)
+        if len(matches) != 1:
+            raise RuntimeError(f"Expected exactly one match for id={primary_id}, got {matches}")
+        table = matches[0].table_name
+        self.cursor.execute(f"DELETE FROM {table} WHERE id='{simulation_id}'")
+        self.db.commit()
+
+    def retrieve_all_simulations(self, primary_id: str) -> list[SimulationEntry]:
+        matches = self.retrieve_simulation_table(primary_id)
+        if len(matches) != 1:
+            raise RuntimeError(f"Expected exactly one match for id={primary_id}, got {matches}")
+        table = matches[0].table_name
+        columns = self.retrieve_column_names(table)
+        self.check_table_exists(table)
+        self.cursor.execute(f"SELECT * FROM {table}")
+        return [SimulationEntry.from_query_result(columns, x) for x in self.cursor.fetchall()]
+
+    def table_has_columns(self, table_name: str, columns: list[str]) -> bool:
+        self.check_table_exists(table_name)
+        self.cursor.execute(f"SELECT * FROM {table_name} LIMIT 0")
+        return all([x[1] == c for x, c in zip(self.cursor.description, columns)])
