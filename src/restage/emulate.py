@@ -1,3 +1,4 @@
+from pathlib import Path
 
 def mccode_sim_io(instr, parameters, args: dict):
     from io import StringIO
@@ -79,3 +80,17 @@ def extend_mccode_dat_io(content, directory, parameters):
           file=content)
     return content
 
+
+def combine_mccode_dats_in_directories(directories: list[Path], output: Path):
+    from mccode.loader import write_combined_mccode_dats
+    dat_names = [x.name for x in directories[0].glob('*.dat')]
+    for directory in directories[1:]:
+        dir_dat_names = [x.name for x in directory.glob('*.dat')]
+        if not all(x in dat_names for x in dir_dat_names):
+            raise RuntimeError(f'Extra mccode.dat file(s) are present in {directory}')
+        if not all(x in dir_dat_names for x in dat_names):
+            raise RuntimeError(f'Not all mccode.dat files are present in {directory}')
+
+    for name in dat_names:
+        dat_files = [x.joinpath(name) for x in directories]
+        write_combined_mccode_dats(dat_files, output.joinpath(name))

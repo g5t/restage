@@ -89,7 +89,7 @@ class SplitRunTestCase(unittest.TestCase):
         from mccode.loader import parse_mcstas_instr
         d_spacing = 3.355  # (002) for Highly-ordered Pyrolytic Graphite
         mean_energy = 5.0
-        energy_width = 0.1
+        energy_width = 1.0
         mean_ki = sqrt(mean_energy / 2.7022)
         min_ki = sqrt((mean_energy - energy_width) / 2.7022)
         max_ki = sqrt((mean_energy + energy_width) / 2.7022)
@@ -100,9 +100,15 @@ class SplitRunTestCase(unittest.TestCase):
         COMPONENT source = Source_simple(yheight=0.25, xwidth=0.2, dist=1.5, focus_xw=0.06, focus_yh=0.12,
                                          E0={mean_energy}, dE={energy_width})
                            AT (0, 0, 0) RELATIVE origin
-        COMPONENT guide = Guide_gravity(w1 = 0.06, h1 = 0.12, w2 = 0.05, h2 = 0.1, l = 30, m = 4) 
+        COMPONENT guide1 = Guide_gravity(w1 = 0.06, h1 = 0.12, w2 = 0.05, h2 = 0.1, l = 15, m = 4) 
                           AT (0, 0, 1.5) RELATIVE  PREVIOUS
-        COMPONENT guide_end = Arm() AT (0, 0, 30) RELATIVE PREVIOUS
+        COMPONENT guide1_end = Arm() AT (0, 0, 15) RELATIVE PREVIOUS
+        COMPONENT monitor = E_monitor(xwidth=0.05, yheight=0.1, nE=50,
+                                      Emin={mean_energy - 2*energy_width}, Emax={mean_energy + 2*energy_width})
+                          AT (0, 0, 0.01) RELATIVE PREVIOUS
+        COMPONENT image = PSD_monitor(xwidth=0.1, yheight=0.15, nx=100, ny=160) AT (0, 0, 0.01) RELATIVE PREVIOUS
+        COMPONENT guide2 = Guide_gravity(w1 = 0.05, h1 = 0.1, l = 15, m = 8) AT (0, 0, 0.01) RELATIVE PREVIOUS
+        COMPONENT guide2_end = Arm() AT (0, 0, 15) RELATIVE PREVIOUS
         COMPONENT aperture = Slit(xwidth=virtual_source_x, yheight=virtual_source_y) AT (0, 0, 0.01) RELATIVE PREVIOUS
         COMPONENT split_at = Arm() AT (0, 0, 0.0001) RELATIVE PREVIOUS
         COMPONENT mono_point = Arm() AT (0, 0, 0.8) RELATIVE split_at

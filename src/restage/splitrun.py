@@ -208,10 +208,18 @@ def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, gri
             f.write(dat_contents.getvalue())
 
 
+def _args_pars_mcpl(args: dict, params: dict, mcpl_filename) -> str:
+    # Combine the arguments, parameters, and mcpl filename into a single command-arguments string:
+    first = ' '.join(mccode_runtime_dict_to_args_list(args))
+    second = ' '.join([f'{k}={v}' for k, v in params.items()])
+    third = f'mcpl_filename={mcpl_filename}'
+    return ' '.join((first, second, third))
+
+
 def do_primary_simulation(sit: SimulationEntry,
                           instr_file_entry: InstrEntry,
                           parameters: dict,
-                          args: dict):
+                          args: dict, repeat_particle_count: int = 10_000):
     from zenlog import log
     from pathlib import Path
     from mccode.compiler.c import run_compiled_instrument, CBinaryTarget
@@ -227,32 +235,58 @@ def do_primary_simulation(sit: SimulationEntry,
 
     # ensure the primary spectrometer uses our output directory
     args_dict = {k: v for k, v in args.items() if k != 'dir'}
-    args_dict['dir'] = work_dir
-    # convert the dictionary to a list of arguments, then combine with the parameters
-    args = mccode_runtime_dict_to_args_list(args_dict)
-    args = ' '.join(args) + ' ' + ' '.join([f'{k}={v}' for k, v in parameters.items()])
     # and append our mcpl_filename parameter
-    args += f' mcpl_filename={work_dir.joinpath(sit.id)}.mcpl'
-    run_compiled_instrument(binary_at, target, args, capture=False)
+    mcpl_filename = f'{work_dir.joinpath(sit.id)}.mcpl'
+    if not repeat_particle_count or args.get('ncount') is None:
+        # convert the dictionary to a list of arguments, then combine with the parameters
+        args_dict['dir'] = work_dir
+        run_compiled_instrument(binary_at, target, _args_pars_mcpl(args_dict, parameters, mcpl_filename), capture=False)
+    else:
+        from .emulate import combine_mccode_dats_in_directories
+        from .mcpl import mcpl_particle_count, mcpl_merge_files
+        remaining, count, latest_result = args['ncount'], args['ncount'], -1
+        files, outputs = [], []
+        # Normally we _don't_ create `work_dir` to avoid McStas complaining about the directory existing
+        # but in this case we will use subdirectories for the actuall output files, so we need to create it
+        work_dir.mkdir(parents=True)
+        # ensure we have a standardized dictionary
+        args_dict = regular_mccode_runtime_dict(args_dict)
+        # check for the presence of a defined seed; which _can_not_ be used for repeated simulations:
+        import random
+        if 'seed' in args_dict:
+            random.seed(args_dict['seed'])
+
+        while remaining > 0:
+            if latest_result == 0:
+                log.warn(f'No particles emitted in previous run, stopping')
+                break
+            elif latest_result > 0:
+                # update the remaining particle count and adjust our guess for how many particles to simulate
+                remaining -= latest_result
+                count = (remaining * args_dict['ncount']) // latest_result
+            if 'seed' in args_dict:
+                args_dict['seed'] = random.random()
+            args_dict['ncount'] = max(count, repeat_particle_count)
+            outputs.append(work_dir.joinpath(f'{len(files)}'))
+            files.append(work_dir.joinpath(f'part_{len(files)}.mcpl'))
+            args_dict['dir'] = outputs[-1]
+            run_compiled_instrument(binary_at, target, _args_pars_mcpl(args_dict, parameters, files[-1]), capture=False)
+            latest_result = mcpl_particle_count(files[-1])
+        # now we need to concatenate the mcpl files
+        mcpl_merge_files(files, mcpl_filename)
+        # and merge any output (.dat) files
+        combine_mccode_dats_in_directories(outputs, work_dir)
+        # ... plus the mccode.sim file :(
     return str(work_dir)
 
 
 def do_secondary_simulation(p_sit: SimulationEntry, entry: InstrEntry, pars: dict, args: dict[str]):
     from pathlib import Path
     from mccode.compiler.c import run_compiled_instrument, CBinaryTarget
+    from .mcpl import mcpl_real_filename
 
-    mcpl_path = Path(p_sit.output_path).joinpath(p_sit.id)
-    if mcpl_path.with_suffix('.mcpl').exists():
-        mcpl_path = mcpl_path.with_suffix('.mcpl')
-    elif mcpl_path.with_suffix('.mcpl.gz').exists():
-        mcpl_path = mcpl_path.with_suffix('.mcpl.gz')
-    else:
-        raise RuntimeError(f"Could not find MCPL file {mcpl_path} with either .mcpl or .mcpl.gz suffixes")
-
-    args = ' '.join(mccode_runtime_dict_to_args_list(args)) + ' ' + ' '.join([f'{k}={v}' for k, v in pars.items()])
-    args += f' mcpl_filename={mcpl_path}'
-
+    mcpl_path = mcpl_real_filename(Path(p_sit.output_path).joinpath(p_sit.id))
     executable = Path(entry.binary_path)
     target = CBinaryTarget(mpi=False, acc=False, count=1, nexus=False)
-    run_compiled_instrument(executable, target, args, capture=False)
+    run_compiled_instrument(executable, target, _args_pars_mcpl(args, pars, mcpl_path), capture=False)
 
