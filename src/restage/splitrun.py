@@ -171,7 +171,7 @@ def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, gri
     from .range import parameters_to_scan
     from .instr import collect_parameter_dict
     from .tables import best_simulation_entry_match
-    from .emulate import mccode_sim_io, mccode_dat_io, extend_mccode_dat_io
+    from .emulate import mccode_sim_io, mccode_dat_io, mccode_dat_line
     instr_entry = cache_instr(post)
     args = regular_mccode_runtime_dict(runtime_arguments)
     sit_kw = {'seed': args.get('seed'), 'ncount': args.get('ncount'), 'gravitation': args.get('gravitation', False)}
@@ -182,9 +182,7 @@ def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, gri
     n_pts, names, scan = parameters_to_scan(energy_to_chopper_parameters(parameters, grid=grid), grid=grid)
     n_zeros = len(str(n_pts))  # we could use math.log10(n_pts) + 1, but why not use a hacky solution?
 
-    sim_contents = mccode_sim_io(post, parameters, args)
-    dat_contents = mccode_dat_io(post, parameters, args)
-
+    detectors, dat_lines = [], []
     for number, values in enumerate(scan):
         pars = {n: v for n, v in zip(names, values)}
         # parameters for the secondary instrument:
@@ -197,15 +195,19 @@ def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, gri
         # now we can use the best primary simulation entry to perform the secondary simulation
         # but because McCode refuses to use a specified output directory if it is not empty,
         # we need to update the runtime_arguments first!
-        runtime_arguments['dir'] = args["dir"].joinpath(str(number).zfill(n_zeros))
+        # TODO Use the following line instead of the one after it when McCode is fixed to use zero-padded folder names
+        # # runtime_arguments['dir'] = args["dir"].joinpath(str(number).zfill(n_zeros))
+        runtime_arguments['dir'] = args['dir'].joinpath(str(number))
         do_secondary_simulation(sim_entry, instr_entry, secondary_pars, runtime_arguments)
-        extend_mccode_dat_io(dat_contents, runtime_arguments['dir'], secondary_pars)
+        if summary:
+            detectors, line = mccode_dat_line(runtime_arguments['dir'], secondary_pars)
+            dat_lines.append(line)
 
     if summary:
         with args['dir'].joinpath('mccode.sim').open('w') as f:
-            f.write(sim_contents.getvalue())
+            mccode_sim_io(post, parameters, args, detectors, file=f)
         with args['dir'].joinpath('mccode.dat').open('w') as f:
-            f.write(dat_contents.getvalue())
+            mccode_dat_io(post, parameters, args, detectors, dat_lines, file=f)
 
 
 def _args_pars_mcpl(args: dict, params: dict, mcpl_filename) -> str:
@@ -242,7 +244,7 @@ def do_primary_simulation(sit: SimulationEntry,
         args_dict['dir'] = work_dir
         run_compiled_instrument(binary_at, target, _args_pars_mcpl(args_dict, parameters, mcpl_filename), capture=False)
     else:
-        from .emulate import combine_mccode_dats_in_directories
+        from .emulate import combine_mccode_dats_in_directories, combine_mccode_sims_in_directories
         from .mcpl import mcpl_particle_count, mcpl_merge_files
         remaining, count, latest_result = args['ncount'], args['ncount'], -1
         files, outputs = [], []
@@ -276,7 +278,8 @@ def do_primary_simulation(sit: SimulationEntry,
         mcpl_merge_files(files, mcpl_filename)
         # and merge any output (.dat) files
         combine_mccode_dats_in_directories(outputs, work_dir)
-        # ... plus the mccode.sim file :(
+        # ... plus the mccode.sim file
+        combine_mccode_sims_in_directories(outputs, work_dir)
     return str(work_dir)
 
 

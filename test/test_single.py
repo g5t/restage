@@ -110,7 +110,9 @@ class SplitRunTestCase(unittest.TestCase):
         COMPONENT guide2 = Guide_gravity(w1 = 0.05, h1 = 0.1, l = 15, m = 8) AT (0, 0, 0.01) RELATIVE PREVIOUS
         COMPONENT guide2_end = Arm() AT (0, 0, 15) RELATIVE PREVIOUS
         COMPONENT aperture = Slit(xwidth=virtual_source_x, yheight=virtual_source_y) AT (0, 0, 0.01) RELATIVE PREVIOUS
+        COMPONENT before_split = PSD_monitor(xwidth=0.1, yheight=0.15, nx=100, ny=160) AT (0, 0, 0.01) RELATIVE PREVIOUS
         COMPONENT split_at = Arm() AT (0, 0, 0.0001) RELATIVE PREVIOUS
+        COMPONENT after_split = PSD_monitor(xwidth=0.1, yheight=0.15, nx=100, ny=160) AT (0, 0, 0.01) RELATIVE PREVIOUS
         COMPONENT mono_point = Arm() AT (0, 0, 0.8) RELATIVE split_at
         COMPONENT mono = Monochromator_curved(zwidth = 0.02, yheight = 0.02, NH = 13, NV = 7, DM={d_spacing}) 
                          AT (0, 0, 0) RELATIVE  mono_point ROTATED (0, a1, 0) RELATIVE mono_point
