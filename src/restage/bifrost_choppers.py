@@ -4,7 +4,7 @@ SOURCE_FREQUENCY = 14.  # Hz
 # PuleHighFluxOffset
 SOURCE_HIGH_FLUX_DELAY = 0.0002  # s; Time from T0 to 'high pulse'
 # ModPulseLengthHighF
-SOURCE_HIGH_FLUX_WIDTH = 0.00288  # s; Duration of the 'high pulse'
+SOURCE_HIGH_FLUX_WIDTH = 0.00286  # s; Duration of the 'high pulse'
 
 INSTRUMENT_LENGTH = 162.0  # m
 # chopPulseDist
@@ -32,14 +32,9 @@ def velocity_extremes(energy_minimum: float):
 
 def pulse_shaping_chopper_speeds_phases(frequency_order: float, opening_time: float, energy_minimum: float):
     from math import floor
-    from icecream import ic
     opening_angle = 170.  # degrees
-    # ic(opening_time)
     reduction = 360.0 * opening_time * frequency_order * SOURCE_FREQUENCY
     if reduction > opening_angle:
-        # ic(reduction, opening_angle)
-
-        # if frequency_order * opening_time > (opening_angle / 360. / SOURCE_FREQUENCY):
         frequency_order = floor(opening_angle / 360. / SOURCE_FREQUENCY / opening_time)
         print(f"Requested frequency and opening time is unobtainable. Frequency order reduced to {frequency_order}")
     if frequency_order and SOURCE_FREQUENCY:

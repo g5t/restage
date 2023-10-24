@@ -106,12 +106,31 @@ class BIFROSTEnergyTestCase(unittest.TestCase):
 
         pars = [x+y for x, y in product(('ps1', 'ps2', 'fo1', 'fo2', 'bw1', 'bw2'), ('speed', 'phase'))]
 
-        kv = {'order': 14, 'time': 0.0002, 'ei': 7.0}
-        translated = bifrost_translate_energy_to_chopper_parameters(kv)
-        from_mcstas = mcstas_bifrost_calculation(7.0, 0., 0.0002)
-        for x in pars:
-            print(x)
-            self.assertAlmostEqual(from_mcstas[x], translated[x])
+        shortest_time = 0.0001  # this is approximately twice the opening time of the pulse shaping choppers at 15*14 Hz
+        # Normal operation  Shortest full-height pulse  Shorter pulses reduce height
+        #      /-----\                  /\
+        # ----/       \---  -----------/  \------------ -------------/\--------------
+
+        order = 14  # the McStas calculations are for 14th order *only* -- though they can be reduced to lower orders
+
+        # the longest time has both disks (nearly) in phase [in phase if no distance between them]
+        # but we reduce that here to ensure the McStas calculation does not reduce the order
+        longest_time = (170 / 360) / order / 14 - shortest_time
+
+        smallest_energy = 0.75  # ~4 full source periods to reach the sample, and more than 1 meV energy gain
+        largest_energy = 25.  # a guess, but depends on the source spectra
+
+        n_time, n_energy = 100, 100
+        d_time, d_energy = (longest_time - shortest_time) / n_time, (largest_energy - smallest_energy) / n_energy
+        for time_index, energy_index in product(range(n_time), range(n_energy)):
+            time = shortest_time + time_index * d_time
+            energy = smallest_energy + energy_index * d_energy
+
+            kv = {'order': order, 'time': time, 'ei': energy}
+            translated = bifrost_translate_energy_to_chopper_parameters(kv)
+            from_mcstas = mcstas_bifrost_calculation(energy, 0., time)
+            for x in pars:
+                self.assertAlmostEqual(from_mcstas[x], translated[x])
 
 
 if __name__ == '__main__':
