@@ -2,7 +2,7 @@
  * Format:     ANSI C source code
  * Creator:    McStas <http://www.mcstas.org>
  * Instrument: None (splitRunTest_second)
- * Date: 2023-10-16 15:01:44.832642
+ * Date: 2023-10-19 10:36:37.724311
  * File: None
  * CFLAGS=-Wl,-rpath,CMD(mcpl-config --show libdir) -LCMD(mcpl-config --show libdir) -lmcpl -ICMD(mcpl-config --show includedir)
  */
@@ -6402,12 +6402,12 @@ typedef struct _struct_instrument_parameters _class_instrument_parameters;
 struct _instrument_struct {
   char   _name[256]; /* the name of this instrument e.g. 'splitRunTest_second' */
 /* Counters per component instance */
-  double counter_AbsorbProp[6]; /* absorbed events in PROP routines */
-  double counter_N[6], counter_P[6], counter_P2[6]; /* event counters after each component instance */
-  _class_particle _trajectory[6]; /* current trajectory for STORE/RESTORE */
+  double counter_AbsorbProp[7]; /* absorbed events in PROP routines */
+  double counter_N[7], counter_P[7], counter_P2[7]; /* event counters after each component instance */
+  _class_particle _trajectory[7]; /* current trajectory for STORE/RESTORE */
 /* Components position table (absolute and relative coords) */
-  Coords _position_relative[6]; /* positions of all components */
-  Coords _position_absolute[6];
+  Coords _position_relative[7]; /* positions of all components */
+  Coords _position_absolute[7];
   _class_instrument_parameters _parameters; /* instrument parameters */
 } _instrument_var;
 struct _instrument_struct *instrument = & _instrument_var;
@@ -6494,6 +6494,41 @@ struct _struct_MCPL_input {
   _class_MCPL_input_parameters _parameters;
 };
 typedef struct _struct_MCPL_input _class_MCPL_input;
+/* Parameter definition for component type 'PSD_monitor' */
+struct _struct_PSD_monitor_parameters {
+  /* Component type 'PSD_monitor' setting parameters */
+  double nx;
+  double ny;
+  char filename[16384];
+  double xmin;
+  double xmax;
+  double ymin;
+  double ymax;
+  double xwidth;
+  double yheight;
+  double restore_neutron;
+  int nowritefile;
+/* Component type 'PSD_monitor' private parameters */
+  DArray2d PSD_N; /* Not initialized */
+  DArray2d PSD_p; /* Not initialized */
+  DArray2d PSD_p2; /* Not initialized */
+}; /* _struct_PSD_monitor_parameters */
+typedef struct _struct_PSD_monitor_parameters _class_PSD_monitor_parameters;
+
+/* Parameters for component type 'PSD_monitor' */
+struct _struct_PSD_monitor {
+  char     _name[256]; /* e.g. instance of PSD_monitor name */
+  char     _type[12]; /* PSD_monitor */
+  long     _index; /* index in TRACE list */
+  Coords   _position_absolute;
+  Coords   _position_relative; /* wrt PREVIOUS */
+  Rotation _rotation_absolute;
+  Rotation _rotation_relative; /* wrt PREVIOUS */
+  int      _rotation_is_identity;
+  int      _position_relative_is_zero;
+  _class_PSD_monitor_parameters _parameters;
+};
+typedef struct _struct_PSD_monitor _class_PSD_monitor;
 /* Parameter definition for component type 'Arm' */
 struct _struct_Arm_parameters {
   /* Component type 'Arm' setting parameters */
@@ -6603,19 +6638,22 @@ typedef struct _struct_Monitor _class_Monitor;
 /* component split_at = MCPL_input() [1] DECLARE */
 _class_MCPL_input _split_at_var;
 #pragma acc declare create ( _split_at_var )
-/* component mono_point = Arm() [2] DECLARE */
+/* component after_split = PSD_monitor() [2] DECLARE */
+_class_PSD_monitor _after_split_var;
+#pragma acc declare create ( _after_split_var )
+/* component mono_point = Arm() [3] DECLARE */
 _class_Arm _mono_point_var;
 #pragma acc declare create ( _mono_point_var )
-/* component mono = Monochromator_curved() [3] DECLARE */
+/* component mono = Monochromator_curved() [4] DECLARE */
 _class_Monochromator_curved _mono_var;
 #pragma acc declare create ( _mono_var )
-/* component sample_arm = Arm() [4] DECLARE */
+/* component sample_arm = Arm() [5] DECLARE */
 _class_Arm _sample_arm_var;
 #pragma acc declare create ( _sample_arm_var )
-/* component detector = Monitor() [5] DECLARE */
+/* component detector = Monitor() [6] DECLARE */
 _class_Monitor _detector_var;
 #pragma acc declare create ( _detector_var )
-int mcNUMCOMP = 5;
+int mcNUMCOMP = 6;
 /* Contents of read_table-lib.c (requested from Monochromator_curved) */
 /*******************************************************************************
 *
@@ -8045,13 +8083,58 @@ int _split_at_setpos(void)
   instrument->counter_AbsorbProp[1] = 0;
   return(0);
 } /* _split_at_setpos */
+/* component after_split=PSD_monitor() SETTING, POSITION/ROTATION */
+int _after_split_setpos(void)
+{ /* sets initial component parameters, position and rotation */
+  SIG_MESSAGE("[_after_split_setpos] component after_split=PSD_monitor() SETTING [/home/g/.cache/mccode-mcstas/0.0.1/monitors/PSD_monitor.comp:62]");
+  stracpy(_after_split_var._name, "after_split", 12);
+  stracpy(_after_split_var._type, "PSD_monitor", 12);
+  int current_setpos_index = _after_split_var._index = 2;
+  _after_split_var._parameters.nx = 100;
+  _after_split_var._parameters.ny = 160;
+  _after_split_var._parameters.filename[0] = '\0';
+  _after_split_var._parameters.xmin = -0.05;
+  _after_split_var._parameters.xmax = 0.05;
+  _after_split_var._parameters.ymin = -0.05;
+  _after_split_var._parameters.ymax = 0.05;
+  _after_split_var._parameters.xwidth = 0.1;
+  _after_split_var._parameters.yheight = 0.15;
+  _after_split_var._parameters.restore_neutron = 0;
+  _after_split_var._parameters.nowritefile = 0;
+  /* component after_split=PSD_monitor() AT ROTATED */
+  {
+    Coords tc1, tc2;
+    tc1 = coords_set(0,0,0);
+    tc2 = coords_set(0,0,0);
+    Rotation tr1;
+    rot_set_rotation(tr1,0,0,0);
+    rot_set_rotation(tr1, (0)*DEG2RAD, (0)*DEG2RAD, (0)*DEG2RAD);
+    rot_mul(tr1, _split_at_var._rotation_absolute, _after_split_var._rotation_absolute);
+    rot_transpose(_split_at_var._rotation_absolute, tr1);
+    rot_mul(_after_split_var._rotation_absolute, tr1, _after_split_var._rotation_relative);
+    _after_split_var._rotation_is_identity = rot_test_identity(_after_split_var._rotation_relative);
+    tc1 = coords_set(0, 0, 0.01);
+    rot_transpose(_split_at_var._rotation_absolute, tr1);
+    tc2 = rot_apply(tr1, tc1);
+    _after_split_var._position_absolute = coords_add(_split_at_var._position_absolute, tc2);
+    tc1 = coords_sub(_split_at_var._position_absolute, _after_split_var._position_absolute);
+    _after_split_var._position_relative = rot_apply(_after_split_var._rotation_absolute, tc1);
+  } /* after_split=PSD_monitor() AT ROTATED */
+  DEBUG_COMPONENT("after_split", _after_split_var._position_absolute, _after_split_var._rotation_absolute);
+  instrument->_position_absolute[2] = _after_split_var._position_absolute;
+  instrument->_position_relative[2] = _after_split_var._position_relative;
+  _after_split_var._position_relative_is_zero = coords_test_zero(_after_split_var._position_relative);
+  instrument->counter_N[2] = instrument->counter_P[2] = instrument->counter_P2[2] = 0;
+  instrument->counter_AbsorbProp[2] = 0;
+  return(0);
+} /* _after_split_setpos */
 /* component mono_point=Arm() SETTING, POSITION/ROTATION */
 int _mono_point_setpos(void)
 { /* sets initial component parameters, position and rotation */
   SIG_MESSAGE("[_mono_point_setpos] component mono_point=Arm() SETTING [mono_point:0]");
   stracpy(_mono_point_var._name, "mono_point", 11);
   stracpy(_mono_point_var._type, "Arm", 4);
-  int current_setpos_index = _mono_point_var._index = 2;
+  int current_setpos_index = _mono_point_var._index = 3;
   /* component mono_point=Arm() AT ROTATED */
   {
     Coords tc1, tc2;
@@ -8061,22 +8144,22 @@ int _mono_point_setpos(void)
     rot_set_rotation(tr1,0,0,0);
     rot_set_rotation(tr1, (0)*DEG2RAD, (0)*DEG2RAD, (0)*DEG2RAD);
     rot_mul(tr1, _split_at_var._rotation_absolute, _mono_point_var._rotation_absolute);
-    rot_transpose(_split_at_var._rotation_absolute, tr1);
+    rot_transpose(_after_split_var._rotation_absolute, tr1);
     rot_mul(_mono_point_var._rotation_absolute, tr1, _mono_point_var._rotation_relative);
     _mono_point_var._rotation_is_identity = rot_test_identity(_mono_point_var._rotation_relative);
     tc1 = coords_set(0, 0, 0.8);
     rot_transpose(_split_at_var._rotation_absolute, tr1);
     tc2 = rot_apply(tr1, tc1);
     _mono_point_var._position_absolute = coords_add(_split_at_var._position_absolute, tc2);
-    tc1 = coords_sub(_split_at_var._position_absolute, _mono_point_var._position_absolute);
+    tc1 = coords_sub(_after_split_var._position_absolute, _mono_point_var._position_absolute);
     _mono_point_var._position_relative = rot_apply(_mono_point_var._rotation_absolute, tc1);
   } /* mono_point=Arm() AT ROTATED */
   DEBUG_COMPONENT("mono_point", _mono_point_var._position_absolute, _mono_point_var._rotation_absolute);
-  instrument->_position_absolute[2] = _mono_point_var._position_absolute;
-  instrument->_position_relative[2] = _mono_point_var._position_relative;
+  instrument->_position_absolute[3] = _mono_point_var._position_absolute;
+  instrument->_position_relative[3] = _mono_point_var._position_relative;
   _mono_point_var._position_relative_is_zero = coords_test_zero(_mono_point_var._position_relative);
-  instrument->counter_N[2] = instrument->counter_P[2] = instrument->counter_P2[2] = 0;
-  instrument->counter_AbsorbProp[2] = 0;
+  instrument->counter_N[3] = instrument->counter_P[3] = instrument->counter_P2[3] = 0;
+  instrument->counter_AbsorbProp[3] = 0;
   return(0);
 } /* _mono_point_setpos */
 /* component mono=Monochromator_curved() SETTING, POSITION/ROTATION */
@@ -8085,7 +8168,7 @@ int _mono_setpos(void)
   SIG_MESSAGE("[_mono_setpos] component mono=Monochromator_curved() SETTING [/home/g/.cache/mccode-mcstas/0.0.1/optics/Monochromator_curved.comp:129]");
   stracpy(_mono_var._name, "mono", 5);
   stracpy(_mono_var._type, "Monochromator_curved", 21);
-  int current_setpos_index = _mono_var._index = 3;
+  int current_setpos_index = _mono_var._index = 4;
   if ("NULL" && strlen("NULL"))
     stracpy(_mono_var._parameters.reflect, "NULL" ? "NULL" : "", 16384);
   else
@@ -8123,22 +8206,22 @@ int _mono_setpos(void)
     rot_set_rotation(tr1,0,0,0);
     rot_set_rotation(tr1, (0)*DEG2RAD, (_instrument_var._parameters.a1)*DEG2RAD, (0)*DEG2RAD);
     rot_mul(tr1, _mono_point_var._rotation_absolute, _mono_var._rotation_absolute);
-    rot_transpose(_split_at_var._rotation_absolute, tr1);
+    rot_transpose(_after_split_var._rotation_absolute, tr1);
     rot_mul(_mono_var._rotation_absolute, tr1, _mono_var._rotation_relative);
     _mono_var._rotation_is_identity = rot_test_identity(_mono_var._rotation_relative);
     tc1 = coords_set(0, 0, 0);
     rot_transpose(_mono_point_var._rotation_absolute, tr1);
     tc2 = rot_apply(tr1, tc1);
     _mono_var._position_absolute = coords_add(_mono_point_var._position_absolute, tc2);
-    tc1 = coords_sub(_split_at_var._position_absolute, _mono_var._position_absolute);
+    tc1 = coords_sub(_after_split_var._position_absolute, _mono_var._position_absolute);
     _mono_var._position_relative = rot_apply(_mono_var._rotation_absolute, tc1);
   } /* mono=Monochromator_curved() AT ROTATED */
   DEBUG_COMPONENT("mono", _mono_var._position_absolute, _mono_var._rotation_absolute);
-  instrument->_position_absolute[3] = _mono_var._position_absolute;
-  instrument->_position_relative[3] = _mono_var._position_relative;
+  instrument->_position_absolute[4] = _mono_var._position_absolute;
+  instrument->_position_relative[4] = _mono_var._position_relative;
   _mono_var._position_relative_is_zero = coords_test_zero(_mono_var._position_relative);
-  instrument->counter_N[3] = instrument->counter_P[3] = instrument->counter_P2[3] = 0;
-  instrument->counter_AbsorbProp[3] = 0;
+  instrument->counter_N[4] = instrument->counter_P[4] = instrument->counter_P2[4] = 0;
+  instrument->counter_AbsorbProp[4] = 0;
   return(0);
 } /* _mono_setpos */
 /* component sample_arm=Arm() SETTING, POSITION/ROTATION */
@@ -8147,7 +8230,7 @@ int _sample_arm_setpos(void)
   SIG_MESSAGE("[_sample_arm_setpos] component sample_arm=Arm() SETTING [sample_arm:0]");
   stracpy(_sample_arm_var._name, "sample_arm", 11);
   stracpy(_sample_arm_var._type, "Arm", 4);
-  int current_setpos_index = _sample_arm_var._index = 4;
+  int current_setpos_index = _sample_arm_var._index = 5;
   /* component sample_arm=Arm() AT ROTATED */
   {
     Coords tc1, tc2;
@@ -8168,11 +8251,11 @@ int _sample_arm_setpos(void)
     _sample_arm_var._position_relative = rot_apply(_sample_arm_var._rotation_absolute, tc1);
   } /* sample_arm=Arm() AT ROTATED */
   DEBUG_COMPONENT("sample_arm", _sample_arm_var._position_absolute, _sample_arm_var._rotation_absolute);
-  instrument->_position_absolute[4] = _sample_arm_var._position_absolute;
-  instrument->_position_relative[4] = _sample_arm_var._position_relative;
+  instrument->_position_absolute[5] = _sample_arm_var._position_absolute;
+  instrument->_position_relative[5] = _sample_arm_var._position_relative;
   _sample_arm_var._position_relative_is_zero = coords_test_zero(_sample_arm_var._position_relative);
-  instrument->counter_N[4] = instrument->counter_P[4] = instrument->counter_P2[4] = 0;
-  instrument->counter_AbsorbProp[4] = 0;
+  instrument->counter_N[5] = instrument->counter_P[5] = instrument->counter_P2[5] = 0;
+  instrument->counter_AbsorbProp[5] = 0;
   return(0);
 } /* _sample_arm_setpos */
 /* component detector=Monitor() SETTING, POSITION/ROTATION */
@@ -8181,7 +8264,7 @@ int _detector_setpos(void)
   SIG_MESSAGE("[_detector_setpos] component detector=Monitor() SETTING [/home/g/.cache/mccode-mcstas/0.0.1/monitors/Monitor.comp:58]");
   stracpy(_detector_var._name, "detector", 9);
   stracpy(_detector_var._type, "Monitor", 8);
-  int current_setpos_index = _detector_var._index = 5;
+  int current_setpos_index = _detector_var._index = 6;
   _detector_var._parameters.xmin = -0.05;
   _detector_var._parameters.xmax = 0.05;
   _detector_var._parameters.ymin = -0.05;
@@ -8209,11 +8292,11 @@ int _detector_setpos(void)
     _detector_var._position_relative = rot_apply(_detector_var._rotation_absolute, tc1);
   } /* detector=Monitor() AT ROTATED */
   DEBUG_COMPONENT("detector", _detector_var._position_absolute, _detector_var._rotation_absolute);
-  instrument->_position_absolute[5] = _detector_var._position_absolute;
-  instrument->_position_relative[5] = _detector_var._position_relative;
+  instrument->_position_absolute[6] = _detector_var._position_absolute;
+  instrument->_position_relative[6] = _detector_var._position_relative;
   _detector_var._position_relative_is_zero = coords_test_zero(_detector_var._position_relative);
-  instrument->counter_N[5] = instrument->counter_P[5] = instrument->counter_P2[5] = 0;
-  instrument->counter_AbsorbProp[5] = 0;
+  instrument->counter_N[6] = instrument->counter_P[6] = instrument->counter_P2[6] = 0;
+  instrument->counter_AbsorbProp[6] = 0;
   return(0);
 } /* _detector_setpos */
 _class_MCPL_input *class_MCPL_input_initialize(_class_MCPL_input *_comp) {
@@ -8424,6 +8507,57 @@ SIG_MESSAGE("[_MCPL_input_initialize] component NULL=MCPL_input() [/home/g/.cach
   return(_comp);
 } /* class_MCPL_input_initialize */
 
+_class_PSD_monitor *class_PSD_monitor_initialize(_class_PSD_monitor *_comp) {
+#define nx (_comp->_parameters.nx)
+#define ny (_comp->_parameters.ny)
+#define filename (_comp->_parameters.filename)
+#define xmin (_comp->_parameters.xmin)
+#define xmax (_comp->_parameters.xmax)
+#define ymin (_comp->_parameters.ymin)
+#define ymax (_comp->_parameters.ymax)
+#define xwidth (_comp->_parameters.xwidth)
+#define yheight (_comp->_parameters.yheight)
+#define restore_neutron (_comp->_parameters.restore_neutron)
+#define nowritefile (_comp->_parameters.nowritefile)
+#define PSD_N (_comp->_parameters.PSD_N)
+#define PSD_p (_comp->_parameters.PSD_p)
+#define PSD_p2 (_comp->_parameters.PSD_p2)
+SIG_MESSAGE("[_PSD_monitor_initialize] component NULL=PSD_monitor() [/home/g/.cache/mccode-mcstas/0.0.1/monitors/PSD_monitor.comp:62]");
+
+  if (xwidth  > 0) { xmax = xwidth/2;  xmin = -xmax; }
+  if (yheight > 0) { ymax = yheight/2; ymin = -ymax; }
+
+  if ((xmin >= xmax) || (ymin >= ymax)){
+    printf("PSD_monitor: %s: Null detection area !\n"
+           "ERROR        (xwidth,yheight,xmin,xmax,ymin,ymax). Exiting",
+    NAME_CURRENT_COMP);
+    exit(0);
+  }
+
+  PSD_N = create_darr2d(nx, ny);
+  PSD_p = create_darr2d(nx, ny);
+  PSD_p2 = create_darr2d(nx, ny);
+
+  // Use instance name for monitor output if no input was given
+  if (!strcmp(filename,"\0")) sprintf(filename,NAME_CURRENT_COMP);
+
+#undef nx
+#undef ny
+#undef filename
+#undef xmin
+#undef xmax
+#undef ymin
+#undef ymax
+#undef xwidth
+#undef yheight
+#undef restore_neutron
+#undef nowritefile
+#undef PSD_N
+#undef PSD_p
+#undef PSD_p2
+  return(_comp);
+} /* class_PSD_monitor_initialize */
+
 _class_Monochromator_curved *class_Monochromator_curved_initialize(_class_Monochromator_curved *_comp) {
 #define reflect (_comp->_parameters.reflect)
 #define transmit (_comp->_parameters.transmit)
@@ -8622,12 +8756,14 @@ int init(void) { /* called by mccode_main for splitRunTest_second:INITIALIZE */
   /* code_main/parseoptions/readparams sets instrument parameters value */
   stracpy(instrument->_name, "splitRunTest_second", 20);
   _split_at_setpos(); /* type MCPL_input */
+  _after_split_setpos(); /* type PSD_monitor */
   _mono_point_setpos(); /* type Arm */
   _mono_setpos(); /* type Monochromator_curved */
   _sample_arm_setpos(); /* type Arm */
   _detector_setpos(); /* type Monitor */
 /* call iteratively all components INITIALIZE */
   class_MCPL_input_initialize(&_split_at_var);
+  class_PSD_monitor_initialize(&_after_split_var);
   class_Monochromator_curved_initialize(&_mono_var);
   class_Monitor_initialize(&_detector_var);
   if (mcdotrace) display();
@@ -8636,6 +8772,7 @@ int init(void) { /* called by mccode_main for splitRunTest_second:INITIALIZE */
 #ifdef OPENACC
 #include <openacc.h>
 #pragma acc update device(_split_at_var)
+#pragma acc update device(_after_split_var)
 #pragma acc update device(_mono_point_var)
 #pragma acc update device(_mono_var)
 #pragma acc update device(_sample_arm_var)
@@ -8927,6 +9064,83 @@ SIG_MESSAGE("[_MCPL_input_trace] component NULL=MCPL_input() [/home/g/.cache/mcc
 #undef P
   return(_comp);
 } /* class_MCPL_input_trace */
+
+#pragma acc routine
+_class_PSD_monitor *class_PSD_monitor_trace(_class_PSD_monitor *_comp, _class_particle *_particle) {
+ABSORBED=SCATTERED=RESTORE=0;
+#define nx (_comp->_parameters.nx)
+#define ny (_comp->_parameters.ny)
+#define filename (_comp->_parameters.filename)
+#define xmin (_comp->_parameters.xmin)
+#define xmax (_comp->_parameters.xmax)
+#define ymin (_comp->_parameters.ymin)
+#define ymax (_comp->_parameters.ymax)
+#define xwidth (_comp->_parameters.xwidth)
+#define yheight (_comp->_parameters.yheight)
+#define restore_neutron (_comp->_parameters.restore_neutron)
+#define nowritefile (_comp->_parameters.nowritefile)
+#define PSD_N (_comp->_parameters.PSD_N)
+#define PSD_p (_comp->_parameters.PSD_p)
+#define PSD_p2 (_comp->_parameters.PSD_p2)
+SIG_MESSAGE("[_PSD_monitor_trace] component NULL=PSD_monitor() [/home/g/.cache/mccode-mcstas/0.0.1/monitors/PSD_monitor.comp:82]");
+
+  PROP_Z0;
+  if (x>xmin && x<xmax && y>ymin && y<ymax){
+    int i = floor((x - xmin)*nx/(xmax - xmin));
+    int j = floor((y - ymin)*ny/(ymax - ymin));
+
+    double p2 = p*p;
+    #pragma acc atomic
+    PSD_N[i][j] = PSD_N[i][j]+1;
+
+    #pragma acc atomic
+    PSD_p[i][j] = PSD_p[i][j]+p;
+    
+    #pragma acc atomic
+    PSD_p2[i][j] = PSD_p2[i][j] + p2;
+    
+    SCATTER;
+  }
+  if (restore_neutron) {
+    RESTORE_NEUTRON(INDEX_CURRENT_COMP, x, y, z, vx, vy, vz, t, sx, sy, sz, p);
+  }
+
+#ifndef NOABSORB_INF_NAN
+  /* Check for nan or inf particle parms */ 
+  if(isnan(p) || isinf(p)) ABSORB;
+  if(isnan(t) || isinf(t)) ABSORB;
+  if(isnan(vx) || isinf(vx)) ABSORB;
+  if(isnan(vy) || isinf(vy)) ABSORB;
+  if(isnan(vz) || isinf(vz)) ABSORB;
+  if(isnan(x) || isinf(x)) ABSORB;
+  if(isnan(y) || isinf(y)) ABSORB;
+  if(isnan(z) || isinf(z)) ABSORB;
+#else
+  if(isnan(p) || isinf(p)) printf("NAN or INF found in p, %s (particle %lld)\n",_comp->_name,_particle->_uid);
+  if(isnan(t) || isinf(t)) printf("NAN or INF found in t, %s (particle %lld)\n",_comp->_name,_particle->_uid);
+  if(isnan(vx) || isinf(vx)) printf("NAN or INF found in vx, %s (particle %lld)\n",_comp->_name,_particle->_uid);
+  if(isnan(vy) || isinf(vy)) printf("NAN or INF found in vy, %s (particle %lld)\n",_comp->_name,_particle->_uid);
+  if(isnan(vz) || isinf(vz)) printf("NAN or INF found in vz, %s (particle %lld)\n",_comp->_name,_particle->_uid);
+  if(isnan(x) || isinf(x)) printf("NAN or INF found in x, %s (particle %lld)\n",_comp->_name,_particle->_uid);
+  if(isnan(y) || isinf(y)) printf("NAN or INF found in y, %s (particle %lld)\n",_comp->_name,_particle->_uid);
+  if(isnan(z) || isinf(z)) printf("NAN or INF found in z, %s (particle %lld)\n",_comp->_name,_particle->_uid);
+#endif
+#undef nx
+#undef ny
+#undef filename
+#undef xmin
+#undef xmax
+#undef ymin
+#undef ymax
+#undef xwidth
+#undef yheight
+#undef restore_neutron
+#undef nowritefile
+#undef PSD_N
+#undef PSD_p
+#undef PSD_p2
+  return(_comp);
+} /* class_PSD_monitor_trace */
 
 
 #pragma acc routine
@@ -9379,12 +9593,33 @@ int raytrace(_class_particle* _particle) { /* single event propagation, called b
       _particle->_index++;
       if (!ABSORBED) { DEBUG_STATE(); }
     } /* end of component split_at [1] */
-    /* begin component mono_point=Arm() [2] */
+    /* begin component after_split=PSD_monitor() [2] */
+    if (!_particle->flag_nocoordschange) { // flag activated by JUMP to pass coords change
+      if (_after_split_var._rotation_is_identity) {
+        if(!_after_split_var._position_relative_is_zero) {
+          coords_get(coords_add(coords_set(x,y,z), _after_split_var._position_relative),&x, &y, &z);
+        }
+      } else {
+          mccoordschange(_after_split_var._position_relative, _after_split_var._rotation_relative, _particle);
+      }
+    }
     if (!ABSORBED && _particle->_index == 2) {
       _particle->flag_nocoordschange=0; /* Reset if we came here from a JUMP */
+      _particle_save = *_particle;
+      DEBUG_COMP(_after_split_var._name);
+      DEBUG_STATE();
+      class_PSD_monitor_trace(&_after_split_var, _particle);
+      if (_particle->_restore)
+        particle_restore(_particle, &_particle_save);
       _particle->_index++;
-    } /* end of component mono_point [2] */
-    /* begin component mono=Monochromator_curved() [3] */
+      if (!ABSORBED) { DEBUG_STATE(); }
+    } /* end of component after_split [2] */
+    /* begin component mono_point=Arm() [3] */
+    if (!ABSORBED && _particle->_index == 3) {
+      _particle->flag_nocoordschange=0; /* Reset if we came here from a JUMP */
+      _particle->_index++;
+    } /* end of component mono_point [3] */
+    /* begin component mono=Monochromator_curved() [4] */
     if (!_particle->flag_nocoordschange) { // flag activated by JUMP to pass coords change
       if (_mono_var._rotation_is_identity) {
         if(!_mono_var._position_relative_is_zero) {
@@ -9394,7 +9629,7 @@ int raytrace(_class_particle* _particle) { /* single event propagation, called b
           mccoordschange(_mono_var._position_relative, _mono_var._rotation_relative, _particle);
       }
     }
-    if (!ABSORBED && _particle->_index == 3) {
+    if (!ABSORBED && _particle->_index == 4) {
       _particle->flag_nocoordschange=0; /* Reset if we came here from a JUMP */
       _particle_save = *_particle;
       DEBUG_COMP(_mono_var._name);
@@ -9404,13 +9639,13 @@ int raytrace(_class_particle* _particle) { /* single event propagation, called b
         particle_restore(_particle, &_particle_save);
       _particle->_index++;
       if (!ABSORBED) { DEBUG_STATE(); }
-    } /* end of component mono [3] */
-    /* begin component sample_arm=Arm() [4] */
-    if (!ABSORBED && _particle->_index == 4) {
+    } /* end of component mono [4] */
+    /* begin component sample_arm=Arm() [5] */
+    if (!ABSORBED && _particle->_index == 5) {
       _particle->flag_nocoordschange=0; /* Reset if we came here from a JUMP */
       _particle->_index++;
-    } /* end of component sample_arm [4] */
-    /* begin component detector=Monitor() [5] */
+    } /* end of component sample_arm [5] */
+    /* begin component detector=Monitor() [6] */
     if (!_particle->flag_nocoordschange) { // flag activated by JUMP to pass coords change
       if (_detector_var._rotation_is_identity) {
         if(!_detector_var._position_relative_is_zero) {
@@ -9420,7 +9655,7 @@ int raytrace(_class_particle* _particle) { /* single event propagation, called b
           mccoordschange(_detector_var._position_relative, _detector_var._rotation_relative, _particle);
       }
     }
-    if (!ABSORBED && _particle->_index == 5) {
+    if (!ABSORBED && _particle->_index == 6) {
       _particle->flag_nocoordschange=0; /* Reset if we came here from a JUMP */
       _particle_save = *_particle;
       DEBUG_COMP(_detector_var._name);
@@ -9430,8 +9665,8 @@ int raytrace(_class_particle* _particle) { /* single event propagation, called b
         particle_restore(_particle, &_particle_save);
       _particle->_index++;
       if (!ABSORBED) { DEBUG_STATE(); }
-    } /* end of component detector [5] */
-    if (_particle->_index > 5)
+    } /* end of component detector [6] */
+    if (_particle->_index > 6)
       ABSORBED++; /* absorbed when passed all components */
   } /* while !ABSORBED */
 
@@ -9576,12 +9811,24 @@ void raytrace_all_funnel(unsigned long long ncount, unsigned long seed) {
          if (_particle->_restore) particle_restore(_particle, &_particle_save);
         _particle->_index++;
       }
-      // mono_point
+      // after_split
       if (!ABSORBED && _particle->index == 1) {
+        if (_after_split_var._rotation_is_identity) {
+          coords_get(coords_add(coords_set(x,y,z), _after_split_var._position_relative),&x, &y, &z);
+        } else {
+          mccoordschange(_after_split_var._position_relative, _after_split_var._rotation_relative, _particle);
+        }
+        _particle_save = *_particle;
+        class_PSD_monitor_trace(&_after_split_var, _particle);
+         if (_particle->_restore) particle_restore(_particle, &_particle_save);
+        _particle->_index++;
+      }
+      // mono_point
+      if (!ABSORBED && _particle->index == 2) {
         _particle->_index++;
       }
       // mono
-      if (!ABSORBED && _particle->index == 2) {
+      if (!ABSORBED && _particle->index == 3) {
         if (_mono_var._rotation_is_identity) {
           coords_get(coords_add(coords_set(x,y,z), _mono_var._position_relative),&x, &y, &z);
         } else {
@@ -9593,11 +9840,11 @@ void raytrace_all_funnel(unsigned long long ncount, unsigned long seed) {
         _particle->_index++;
       }
       // sample_arm
-      if (!ABSORBED && _particle->index == 3) {
+      if (!ABSORBED && _particle->index == 4) {
         _particle->_index++;
       }
       // detector
-      if (!ABSORBED && _particle->index == 4) {
+      if (!ABSORBED && _particle->index == 5) {
         if (_detector_var._rotation_is_identity) {
           coords_get(coords_add(coords_set(x,y,z), _detector_var._position_relative),&x, &y, &z);
         } else {
@@ -9729,6 +9976,51 @@ _class_MCPL_input *class_MCPL_input_save(_class_MCPL_input *_comp) {
   return(_comp);
 } /* class_MCPL_input_save */
 
+_class_PSD_monitor *class_PSD_monitor_save(_class_PSD_monitor *_comp) {
+#define nx (_comp->_parameters.nx)
+#define ny (_comp->_parameters.ny)
+#define filename (_comp->_parameters.filename)
+#define xmin (_comp->_parameters.xmin)
+#define xmax (_comp->_parameters.xmax)
+#define ymin (_comp->_parameters.ymin)
+#define ymax (_comp->_parameters.ymax)
+#define xwidth (_comp->_parameters.xwidth)
+#define yheight (_comp->_parameters.yheight)
+#define restore_neutron (_comp->_parameters.restore_neutron)
+#define nowritefile (_comp->_parameters.nowritefile)
+#define PSD_N (_comp->_parameters.PSD_N)
+#define PSD_p (_comp->_parameters.PSD_p)
+#define PSD_p2 (_comp->_parameters.PSD_p2)
+  SIG_MESSAGE("[_PSD_monitor_save] component NULL=PSD_monitor() [/home/g/.cache/mccode-mcstas/0.0.1/monitors/PSD_monitor.comp:62]");
+
+    if (!nowritefile) {
+      DETECTOR_OUT_2D(
+          "PSD monitor",
+          "X position [cm]",
+          "Y position [cm]",
+          xmin*100.0, xmax*100.0, ymin*100.0, ymax*100.0,
+          nx, ny,
+          &PSD_N[0][0],&PSD_p[0][0],&PSD_p2[0][0],
+          filename);
+    }
+  
+#undef nx
+#undef ny
+#undef filename
+#undef xmin
+#undef xmax
+#undef ymin
+#undef ymax
+#undef xwidth
+#undef yheight
+#undef restore_neutron
+#undef nowritefile
+#undef PSD_N
+#undef PSD_p
+#undef PSD_p2
+  return(_comp);
+} /* class_PSD_monitor_save */
+
 _class_Monitor *class_Monitor_save(_class_Monitor *_comp) {
 #define xmin (_comp->_parameters.xmin)
 #define xmax (_comp->_parameters.xmax)
@@ -9763,6 +10055,7 @@ int save(FILE *handle) { /* called by mccode_main for splitRunTest_second:SAVE *
   if (!handle) siminfo_init(NULL);
   /* call iteratively all components SAVE */
   class_MCPL_input_save(&_split_at_var);
+  class_PSD_monitor_save(&_after_split_var);
   class_Monitor_save(&_detector_var);
   if (!handle) siminfo_close();
   return(0);
@@ -9855,6 +10148,44 @@ _class_MCPL_input *class_MCPL_input_finally(_class_MCPL_input *_comp) {
   return(_comp);
 } /* class_MCPL_input_finally */
 
+_class_PSD_monitor *class_PSD_monitor_finally(_class_PSD_monitor *_comp) {
+#define nx (_comp->_parameters.nx)
+#define ny (_comp->_parameters.ny)
+#define filename (_comp->_parameters.filename)
+#define xmin (_comp->_parameters.xmin)
+#define xmax (_comp->_parameters.xmax)
+#define ymin (_comp->_parameters.ymin)
+#define ymax (_comp->_parameters.ymax)
+#define xwidth (_comp->_parameters.xwidth)
+#define yheight (_comp->_parameters.yheight)
+#define restore_neutron (_comp->_parameters.restore_neutron)
+#define nowritefile (_comp->_parameters.nowritefile)
+#define PSD_N (_comp->_parameters.PSD_N)
+#define PSD_p (_comp->_parameters.PSD_p)
+#define PSD_p2 (_comp->_parameters.PSD_p2)
+  SIG_MESSAGE("[_PSD_monitor_finally] component NULL=PSD_monitor() [/home/g/.cache/mccode-mcstas/0.0.1/monitors/PSD_monitor.comp:119]");
+
+  destroy_darr2d(PSD_N);
+  destroy_darr2d(PSD_p);
+  destroy_darr2d(PSD_p2);
+
+#undef nx
+#undef ny
+#undef filename
+#undef xmin
+#undef xmax
+#undef ymin
+#undef ymax
+#undef xwidth
+#undef yheight
+#undef restore_neutron
+#undef nowritefile
+#undef PSD_N
+#undef PSD_p
+#undef PSD_p2
+  return(_comp);
+} /* class_PSD_monitor_finally */
+
 _class_Monochromator_curved *class_Monochromator_curved_finally(_class_Monochromator_curved *_comp) {
 #define reflect (_comp->_parameters.reflect)
 #define transmit (_comp->_parameters.transmit)
@@ -9936,6 +10267,7 @@ _class_Monochromator_curved *class_Monochromator_curved_finally(_class_Monochrom
 
 int finally(void) { /* called by mccode_main for splitRunTest_second:FINALLY */
 #pragma acc update host(_split_at_var)
+#pragma acc update host(_after_split_var)
 #pragma acc update host(_mono_point_var)
 #pragma acc update host(_mono_var)
 #pragma acc update host(_sample_arm_var)
@@ -9946,6 +10278,7 @@ int finally(void) { /* called by mccode_main for splitRunTest_second:FINALLY */
  save(siminfo_file); /* save data when simulation ends */
   /* call iteratively all components FINALLY */
   class_MCPL_input_finally(&_split_at_var);
+  class_PSD_monitor_finally(&_after_split_var);
   class_Monochromator_curved_finally(&_mono_var);
   siminfo_close();
   return(0);
@@ -10039,6 +10372,48 @@ _class_MCPL_input *class_MCPL_input_display(_class_MCPL_input *_comp) {
 #undef P
   return(_comp);
 } /* class_MCPL_input_display */
+
+_class_PSD_monitor *class_PSD_monitor_display(_class_PSD_monitor *_comp) {
+#define nx (_comp->_parameters.nx)
+#define ny (_comp->_parameters.ny)
+#define filename (_comp->_parameters.filename)
+#define xmin (_comp->_parameters.xmin)
+#define xmax (_comp->_parameters.xmax)
+#define ymin (_comp->_parameters.ymin)
+#define ymax (_comp->_parameters.ymax)
+#define xwidth (_comp->_parameters.xwidth)
+#define yheight (_comp->_parameters.yheight)
+#define restore_neutron (_comp->_parameters.restore_neutron)
+#define nowritefile (_comp->_parameters.nowritefile)
+#define PSD_N (_comp->_parameters.PSD_N)
+#define PSD_p (_comp->_parameters.PSD_p)
+#define PSD_p2 (_comp->_parameters.PSD_p2)
+  SIG_MESSAGE("[_PSD_monitor_display] component NULL=PSD_monitor() [/home/g/.cache/mccode-mcstas/0.0.1/monitors/PSD_monitor.comp:126]");
+  printf("MCDISPLAY: component %s\n", _comp->_name);
+
+  
+  multiline(5, (double)xmin, (double)ymin, 0.0,
+               (double)xmax, (double)ymin, 0.0,
+               (double)xmax, (double)ymax, 0.0,
+               (double)xmin, (double)ymax, 0.0,
+               (double)xmin, (double)ymin, 0.0);
+
+#undef nx
+#undef ny
+#undef filename
+#undef xmin
+#undef xmax
+#undef ymin
+#undef ymax
+#undef xwidth
+#undef yheight
+#undef restore_neutron
+#undef nowritefile
+#undef PSD_N
+#undef PSD_p
+#undef PSD_p2
+  return(_comp);
+} /* class_PSD_monitor_display */
 
 _class_Arm *class_Arm_display(_class_Arm *_comp) {
 
@@ -10202,6 +10577,7 @@ int display(void) { /* called by mccode_main for splitRunTest_second:DISPLAY */
 
   /* call iteratively all components DISPLAY */
   class_MCPL_input_display(&_split_at_var);
+  class_PSD_monitor_display(&_after_split_var);
   class_Arm_display(&_mono_point_var);
   class_Monochromator_curved_display(&_mono_var);
   class_Arm_display(&_sample_arm_var);
@@ -10217,6 +10593,7 @@ void* _getvar_parameters(char* compname)
     #define strcmp(a,b) str_comp(a,b)
   #endif
   if (!strcmp(compname, "split_at")) return (void *) &(_split_at_var._parameters);
+  if (!strcmp(compname, "after_split")) return (void *) &(_after_split_var._parameters);
   if (!strcmp(compname, "mono_point")) return (void *) &(_mono_point_var._parameters);
   if (!strcmp(compname, "mono")) return (void *) &(_mono_var._parameters);
   if (!strcmp(compname, "sample_arm")) return (void *) &(_sample_arm_var._parameters);
@@ -10235,10 +10612,11 @@ int _getcomp_index(char* compname)
  * Component indexing into MACROS, e.g., POS_A_COMP_INDEX, are 1-based! */
 {
   if (!strcmp(compname, "split_at")) return 1;
-  if (!strcmp(compname, "mono_point")) return 2;
-  if (!strcmp(compname, "mono")) return 3;
-  if (!strcmp(compname, "sample_arm")) return 4;
-  if (!strcmp(compname, "detector")) return 5;
+  if (!strcmp(compname, "after_split")) return 2;
+  if (!strcmp(compname, "mono_point")) return 3;
+  if (!strcmp(compname, "mono")) return 4;
+  if (!strcmp(compname, "sample_arm")) return 5;
+  if (!strcmp(compname, "detector")) return 6;
   return -1;
 }
 

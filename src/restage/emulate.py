@@ -1,7 +1,8 @@
 from pathlib import Path
+from icecream import ic
 
 
-def mccode_sim_io(instr, parameters, args: dict, detectors: list[str], file=None):
+def mccode_sim_io(instr, parameters, args: dict, detectors: list[str], file=None, grid: bool = False):
     from datetime import datetime
     from restage import __version__
     from restage.range import parameters_to_scan
@@ -19,7 +20,7 @@ def mccode_sim_io(instr, parameters, args: dict, detectors: list[str], file=None
     print('begin simulation', file=file)
     print(f'Date: {datetime.now():%a %b %d %H %M %Y}', file=file)
     print(f'Ncount: {args.get("ncount", -1)}', file=file)
-    n_pts, names, scan = parameters_to_scan(parameters)
+    n_pts, names, scan = parameters_to_scan(parameters, grid=grid)
     print(f'Numpoints: {n_pts}', file=file)
     print(f'Param: {", ".join(str(p) for p in parameters)}', file=file)
     print(f'end simulation', file=file)
@@ -31,8 +32,11 @@ def mccode_sim_io(instr, parameters, args: dict, detectors: list[str], file=None
     print(f'yvars: {" ".join(f"({x}_I,{x}_ERR)" for x in detectors)}', file=file)
     print(f"xlabel: '{', '.join(names)}'", file=file)
     print(f"ylabel: 'Intensity'", file=file)
-    x = [x for x in parameters.values() if len(x)][0]
-    print(f'xlimits: {min(x)} {max(x)}', file=file)  # McCode only uses the first-scanned parameter here
+    x = [x for x in parameters.values() if len(x) > 1]
+    if len(x):
+        print(f'xlimits: {x[0].min} {x[0].max}', file=file)  # McCode only uses the first-scanned parameter here
+    else:
+        print('xlimits: 0 1', file=file)
     print('filename: mccode.dat', file=file)
     print(f'variables: {" ".join(names)} {" ".join(f"{x}_I {x}_ERR" for x in detectors)}', file=file)
     print('end data', file=file)
@@ -40,13 +44,13 @@ def mccode_sim_io(instr, parameters, args: dict, detectors: list[str], file=None
     return file
 
 
-def mccode_dat_io(instr, parameters, args: dict, detectors: list[str], lines: list[str], file=None):
+def mccode_dat_io(instr, parameters, args: dict, detectors: list[str], lines: list[str], file=None, grid: bool = False):
     from datetime import datetime
     from restage.range import parameters_to_scan
     if file is None:
         from io import StringIO
         file = StringIO()
-    n_pts, names, scan = parameters_to_scan(parameters)
+    n_pts, names, scan = parameters_to_scan(parameters, grid=grid)
     print(f"# Instrument-source: '{instr.source or 'Not Provided'}'", file=file)
     print(f'# Date: {datetime.now():%a %b %d %H %M %Y}', file=file)
     print(f'# Ncount: {args.get("ncount", -1)}', file=file)
@@ -58,8 +62,11 @@ def mccode_dat_io(instr, parameters, args: dict, detectors: list[str], lines: li
     print(f"# ylabel: 'Intensity'", file=file)
     print(f'# xvars: {", ".join(names)}', file=file)
     print(f'# yvars: {" ".join(f"({x}_I,{x}_ERR)" for x in detectors)}', file=file)
-    x = [x for x in parameters.values() if len(x)][0]
-    print(f'# xlimits: {min(x)} {max(x)}', file=file)  # McCode only uses the first-scanned parameter here
+    x = [x for x in parameters.values() if len(x) > 1]
+    if len(x):
+        print(f'# xlimits: {x[0].min} {x[0].max}', file=file)  # McCode only uses the first-scanned parameter here
+    else:
+        print('# xlimits: 0 1', file=file)
     print(f'# filename: mccode.dat', file=file)
     print(f'# variables: {" ".join(names)} {" ".join(f"{x}_I {x}_ERR" for x in detectors)}', file=file)
     for line in lines:

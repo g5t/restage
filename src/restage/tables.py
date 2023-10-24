@@ -7,7 +7,12 @@ def uuid():
     return str(uuid4()).replace('-', '')
 
 
-COMMON_COLUMNS = ['seed', 'ncount', 'output_path', 'gravitation']
+def utc_timestamp() -> float:
+    from datetime import datetime
+    return datetime.utcnow().timestamp()
+
+
+COMMON_COLUMNS = ['seed', 'ncount', 'output_path', 'gravitation', 'creation', 'last_access']
 
 
 @dataclass
@@ -20,6 +25,8 @@ class SimulationEntry:
     gravitation: bool = False
     precision: dict[str, float] = field(default_factory=dict)
     id: str = field(default_factory=uuid)
+    creation: float = field(default_factory=utc_timestamp)
+    last_access: float = field(default_factory=utc_timestamp)
 
     @classmethod
     def from_query_result(cls, names: list[str], values):
@@ -29,15 +36,10 @@ class SimulationEntry:
             raise RuntimeError(f"Missing 'output_path' column in {names}")
         if len(names) != len(values):
             raise RuntimeError(f"Column names {names} do not match query result {values}")
-
-        q_id = values[names.index('id')]
-        q_seed = values[names.index('seed')]  # already converted to None if <null> stored in table
-        q_ncount = values[names.index('ncount')]  # same here
-        q_path = values[names.index('output_path')]
-        q_gravitation = values[names.index('gravitation')] > 0
-        extracted = ('id', 'seed', 'ncount', 'output_path', 'gravitation')
-        pv = {k: v for k, v in zip(names, values) if k not in extracted}
-        return cls(pv, seed=q_seed, ncount=q_ncount, output_path=q_path, gravitation=q_gravitation, id=q_id)
+        q = {k: values[names.index(k)] for k in ['id'] + COMMON_COLUMNS}
+        q['gravitation'] = q['gravitation'] > 0
+        pv = {k: v for k, v in zip(names, values) if k not in q}
+        return cls(pv, **q)
 
     def __post_init__(self):
         from zenlog import log
@@ -52,9 +54,11 @@ class SimulationEntry:
                 if len(best) > 1:
                     log.info(f"SimulationEntry.__post_init__:: Multiple precision matches for {k}: {best}")
                 if len(best):
-                    self.precision[k] = self.precision[best[0]]
+                    # This abs is probably overkill, but it's worth protecting against a user-specified negative value
+                    self.precision[k] = abs(self.precision[best[0]])
                 elif self.parameter_values[k].has_value:
-                    self.precision[k] = self.parameter_values[k].value / 10000
+                    # This abs is *crucial* since a negative parameter value would have a negative precision otherwise
+                    self.precision[k] = abs(self.parameter_values[k].value / 100)
                 else:
                     log.info(f'SimulationEntry.__post_init__:: No precision match for value-less {k}, using 0.1;'
                              ' consider specifying precision dict during initialization')
@@ -97,6 +101,8 @@ class SimulationEntry:
         values.append('null' if self.ncount is None else f"{self.ncount}")
         values.append('null' if self.output_path is None else f"'{self.output_path}'")
         values.append(f'{self.gravitation}')
+        values.append(f'{self.creation}')
+        values.append(f'{self.last_access}')
         for v in self.parameter_values.values():
             if v.is_float or v.is_int:
                 values.append(f"{v.value}")
@@ -167,12 +173,14 @@ class SimulationTableEntry:
     parameters: list[str]
     name: str = field(default_factory=str)
     id: str = field(default_factory=uuid)
+    creation: float = field(default_factory=utc_timestamp)
+    last_access: float = field(default_factory=utc_timestamp)
 
     @classmethod
     def from_query_result(cls, values):
         from json import loads
-        pid,  name, parameters = values
-        return cls(loads(parameters), name, pid)
+        pid,  name, parameters, creation, last_access = values
+        return cls(loads(parameters), name, pid, creation, last_access)
 
     def __post_init__(self):
         if len(self.name) == 0:
@@ -188,11 +196,11 @@ class SimulationTableEntry:
 
     @staticmethod
     def columns():
-        return ['id', 'name', 'parameters']
+        return ['id', 'name', 'parameters', 'creation', 'last_access']
 
     def values(self):
         from json import dumps
-        return [f"'{x}'" for x in [self.id, self.name, dumps(self.parameters)]]
+        return [f"'{x}'" for x in [self.id, self.name, dumps(self.parameters)]] + [f'{self.creation}', f'{self.last_access}']
 
     @classmethod
     def create_sql_table(cls, table_name: str):
@@ -306,11 +314,13 @@ class InstrEntry:
     binary_path: str
     mccode_version: str = field(default_factory=str)
     id: str = field(default_factory=uuid)
+    creation: float = field(default_factory=utc_timestamp)
+    last_access: float = field(default_factory=utc_timestamp)
 
     @classmethod
     def from_query_result(cls, values):
-        fid, file_contents, binary_path, mccode_version = values
-        return cls(file_contents, binary_path, mccode_version, fid)
+        fid, file_contents, binary_path, mccode_version, creation, last_access = values
+        return cls(file_contents, binary_path, mccode_version, fid, creation, last_access)
 
     def __post_init__(self):
         if len(self.mccode_version) == 0:
@@ -319,10 +329,12 @@ class InstrEntry:
 
     @staticmethod
     def columns():
-        return ['id', 'file_contents', 'binary_path', 'mccode_version']
+        return ['id', 'file_contents', 'binary_path', 'mccode_version', 'creation', 'last_access']
 
     def values(self):
-        return [f"'{x}'" for x in (self.id, self.file_contents, self.binary_path, self.mccode_version)]
+        str_values = [f"'{x}'" for x in (self.id, self.file_contents, self.binary_path, self.mccode_version)]
+        flt_values = [f'{self.creation}', f'{self.last_access}']
+        return str_values + flt_values
 
     @classmethod
     def create_sql_table(cls, table_name: str = 'instr_files'):

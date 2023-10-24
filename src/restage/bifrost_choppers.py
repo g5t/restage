@@ -31,9 +31,15 @@ def velocity_extremes(energy_minimum: float):
 
 
 def pulse_shaping_chopper_speeds_phases(frequency_order: float, opening_time: float, energy_minimum: float):
+    from math import floor
+    from icecream import ic
     opening_angle = 170.  # degrees
-    if frequency_order * opening_time > (opening_angle / 360. / SOURCE_FREQUENCY):
-        from math import floor
+    # ic(opening_time)
+    reduction = 360.0 * opening_time * frequency_order * SOURCE_FREQUENCY
+    if reduction > opening_angle:
+        # ic(reduction, opening_angle)
+
+        # if frequency_order * opening_time > (opening_angle / 360. / SOURCE_FREQUENCY):
         frequency_order = floor(opening_angle / 360. / SOURCE_FREQUENCY / opening_time)
         print(f"Requested frequency and opening time is unobtainable. Frequency order reduced to {frequency_order}")
     if frequency_order and SOURCE_FREQUENCY:

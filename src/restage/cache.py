@@ -9,6 +9,7 @@ def setup_database(named: str):
     db = Database(db_file)
     return db
 
+
 # Create the global database object in the module namespace.
 DATABASE = setup_database('database')
 
@@ -19,6 +20,19 @@ def module_data_path(sub: str):
     if not path.exists():
         path.mkdir(parents=True)
     return path
+
+
+def directory_under_module_data_path(sub: str, prefix=None, suffix=None, name=None):
+    """Create a new directory under the module's given data path, and return its path"""
+    # Use mkdtemp to have a short-unique name if no name is given
+    from tempfile import mkdtemp
+    from pathlib import Path
+    under = module_data_path(sub)
+    if name is not None:
+        p = under.joinpath(name)
+        if not p.exists():
+            p.mkdir(parents=True)
+    return Path(mkdtemp(dir=under, prefix=prefix or '', suffix=suffix or ''))
 
 
 def _compile_instr(entry: InstrEntry, instr: Instr, config: dict = None, target=None, generator=None):

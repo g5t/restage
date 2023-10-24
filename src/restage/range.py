@@ -9,9 +9,22 @@ class MRange:
         self.start = start
         self.stop = stop
         self.step = step
+        if self.start == self.stop:
+            raise ValueError(f'MRange start and stop values are equal: {self.start} '
+                             f'`list(MRange)` will be empty! Use a `Singular({self.start}, 1)` range instead.')
+        if self.step == 0:
+            raise ZeroDivisionError('MRange step cannot be zero')
 
     def __eq__(self, other):
         return self.start == other.start and self.stop == other.stop and self.step == other.step
+
+    @property
+    def min(self):
+        return self.start
+
+    @property
+    def max(self):
+        return self.stop
 
     def __iter__(self):
         def range_gen(start, stop, step):
@@ -74,6 +87,20 @@ class Singular:
         self.value = value
         self.maximum = maximum
 
+    def __str__(self):
+        return f'{self.value}(up to {self.maximum} times)'
+
+    def __repr__(self):
+        return f'Singular({self.value}, {self.maximum})'
+
+    @property
+    def min(self):
+        return self.value
+
+    @property
+    def max(self):
+        return self.value
+
     def __iter__(self):
         def forever():
             while True:
@@ -122,7 +149,7 @@ def parse_list(range_type, unparsed: list[str]):
     return ranges
 
 
-def parameters_to_scan(parameters: dict[str, Union[list, MRange]], grid: bool = False):
+def parameters_to_scan(parameters: dict[str, Union[list, MRange, Singular]], grid: bool = False):
     """Convert a dictionary of ranged parameters to a list of parameter names and an iterable of parameter value tuples.
 
     The ranged parameters can be either MRange objects or lists of values. If a list of values is provided, it will be
@@ -131,6 +158,12 @@ def parameters_to_scan(parameters: dict[str, Union[list, MRange]], grid: bool = 
     :parameter parameters: A dictionary of ranged parameters.
     :parameter grid: Controls how the parameters are iterated; True implies a grid scan, False implies a linear scan.
     """
+    from icecream import ic
+    if grid:
+        for k, v in parameters.items():
+            if isinstance(v, Singular):
+                parameters[k] = Singular(v.value, 1)
+
     names = [x.lower() for x in parameters.keys()]
     values = [x if hasattr(x, '__iter__') else [x] for x in parameters.values()]
     if not len(values):
@@ -151,6 +184,7 @@ def parameters_to_scan(parameters: dict[str, Union[list, MRange]], grid: bool = 
                 have = 'have' if len(others) > 1 else 'has'
                 others = ', '.join(others)
                 raise ValueError(f'Parameter {names[i]} has {len(v)} values, but {par} {others} {have} {n_max}')
+        ic(values)
         return n_max, names, zip(*[v if len(v) > 1 else Singular(v[0], n_max) for v in values])
 
 

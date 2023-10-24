@@ -89,9 +89,15 @@ class Database:
             self.cursor.execute(command)
         self.db.commit()
 
-    def retrieve_simulation_table(self, primary_id: str) -> list[SimulationTableEntry]:
+    def retrieve_simulation_table(self, primary_id: str, update_access_time=True) -> list[SimulationTableEntry]:
         self.cursor.execute(f"SELECT * FROM {self.simulations_table} WHERE id='{primary_id}'")
-        return [SimulationTableEntry.from_query_result(x) for x in self.cursor.fetchall()]
+        entries = [SimulationTableEntry.from_query_result(x) for x in self.cursor.fetchall()]
+        if update_access_time:
+            from .tables import utc_timestamp
+            self.cursor.execute(f"UPDATE {self.simulations_table} SET last_access='{utc_timestamp()}' "
+                                f"WHERE id='{primary_id}'")
+            self.db.commit()
+        return entries
 
     def retrieve_all_simulation_tables(self) -> list[SimulationTableEntry]:
         self.cursor.execute(f"SELECT * FROM {self.simulations_table}")
@@ -122,10 +128,17 @@ class Database:
         self.cursor.execute(command)
         self.db.commit()
 
-    def _retrieve_simulation(self, table: str, columns: list[str], pars: SimulationEntry) -> list[SimulationEntry]:
+    def _retrieve_simulation(self, table: str, columns: list[str], pars: SimulationEntry, update_access_time=True)\
+            -> list[SimulationEntry]:
         self.check_table_exists(table)
-        self.cursor.execute(f"SELECT * FROM {table} WHERE {pars.between_query()}")
-        return [SimulationEntry.from_query_result(columns, x) for x in self.cursor.fetchall()]
+        query = f"SELECT * FROM {table} WHERE {pars.between_query()}"
+        self.cursor.execute(query)
+        entries = [SimulationEntry.from_query_result(columns, x) for x in self.cursor.fetchall()]
+        if update_access_time and len(entries):
+            from .tables import utc_timestamp
+            self.cursor.execute(f"UPDATE {table} SET last_access='{utc_timestamp()}' WHERE {pars.between_query()}")
+            self.db.commit()
+        return entries
 
     def retrieve_column_names(self, table_name: str):
         self.check_table_exists(table_name)
@@ -133,7 +146,7 @@ class Database:
         return [x[0] for x in self.cursor.fetchall()]
 
     def insert_simulation(self, simulation: SimulationTableEntry, parameters: SimulationEntry):
-        if len(self.retrieve_simulation_table(simulation.id)) == 0:
+        if len(self.retrieve_simulation_table(simulation.id, update_access_time=False)) == 0:
             self.insert_simulation_table(simulation)
         self._insert_simulation(simulation, parameters)
 

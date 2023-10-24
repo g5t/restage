@@ -9,6 +9,10 @@ class MRangeTestCase(unittest.TestCase):
         self.assertEqual(10, (10-1)/1 + 1)
         self.assertEqual(len(r), 10)
 
+    def test_invalid_range(self):
+        self.assertRaises(ValueError, MRange, 1, 1, 1)
+        self.assertRaises(ZeroDivisionError, MRange, 1, 10, 0)
+
     def test_integer_range_from_str(self):
         r = MRange.from_str('1:10')
         self.assertEqual(list(r), list(range(1, 11)))

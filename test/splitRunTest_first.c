@@ -2,7 +2,7 @@
  * Format:     ANSI C source code
  * Creator:    McStas <http://www.mcstas.org>
  * Instrument: None (splitRunTest_first)
- * Date: 2023-10-17 17:06:56.347981
+ * Date: 2023-10-19 10:34:04.389932
  * File: None
  * CFLAGS=-Wl,-rpath,CMD(mcpl-config --show libdir) -LCMD(mcpl-config --show libdir) -lmcpl -ICMD(mcpl-config --show includedir)
  */
@@ -6445,12 +6445,12 @@ typedef struct _struct_instrument_parameters _class_instrument_parameters;
 struct _instrument_struct {
   char   _name[256]; /* the name of this instrument e.g. 'splitRunTest_first' */
 /* Counters per component instance */
-  double counter_AbsorbProp[11]; /* absorbed events in PROP routines */
-  double counter_N[11], counter_P[11], counter_P2[11]; /* event counters after each component instance */
-  _class_particle _trajectory[11]; /* current trajectory for STORE/RESTORE */
+  double counter_AbsorbProp[12]; /* absorbed events in PROP routines */
+  double counter_N[12], counter_P[12], counter_P2[12]; /* event counters after each component instance */
+  _class_particle _trajectory[12]; /* current trajectory for STORE/RESTORE */
 /* Components position table (absolute and relative coords) */
-  Coords _position_relative[11]; /* positions of all components */
-  Coords _position_absolute[11];
+  Coords _position_relative[12]; /* positions of all components */
+  Coords _position_absolute[12];
   _class_instrument_parameters _parameters; /* instrument parameters */
 } _instrument_var;
 struct _instrument_struct *instrument = & _instrument_var;
@@ -7000,10 +7000,13 @@ _class_Arm _guide2_end_var;
 /* component aperture = Slit() [9] DECLARE */
 _class_Slit _aperture_var;
 #pragma acc declare create ( _aperture_var )
-/* component split_at = MCPL_output() [10] DECLARE */
+/* component before_split = PSD_monitor() [10] DECLARE */
+_class_PSD_monitor _before_split_var;
+#pragma acc declare create ( _before_split_var )
+/* component split_at = MCPL_output() [11] DECLARE */
 _class_MCPL_output _split_at_var;
 #pragma acc declare create ( _split_at_var )
-int mcNUMCOMP = 10;
+int mcNUMCOMP = 11;
 /* Contents of read_table-lib.c (requested from ref-lib) */
 /*******************************************************************************
 *
@@ -9050,13 +9053,58 @@ int _aperture_setpos(void)
   instrument->counter_AbsorbProp[9] = 0;
   return(0);
 } /* _aperture_setpos */
+/* component before_split=PSD_monitor() SETTING, POSITION/ROTATION */
+int _before_split_setpos(void)
+{ /* sets initial component parameters, position and rotation */
+  SIG_MESSAGE("[_before_split_setpos] component before_split=PSD_monitor() SETTING [/home/g/.cache/mccode-mcstas/0.0.1/monitors/PSD_monitor.comp:62]");
+  stracpy(_before_split_var._name, "before_split", 13);
+  stracpy(_before_split_var._type, "PSD_monitor", 12);
+  int current_setpos_index = _before_split_var._index = 10;
+  _before_split_var._parameters.nx = 100;
+  _before_split_var._parameters.ny = 160;
+  _before_split_var._parameters.filename[0] = '\0';
+  _before_split_var._parameters.xmin = -0.05;
+  _before_split_var._parameters.xmax = 0.05;
+  _before_split_var._parameters.ymin = -0.05;
+  _before_split_var._parameters.ymax = 0.05;
+  _before_split_var._parameters.xwidth = 0.1;
+  _before_split_var._parameters.yheight = 0.15;
+  _before_split_var._parameters.restore_neutron = 0;
+  _before_split_var._parameters.nowritefile = 0;
+  /* component before_split=PSD_monitor() AT ROTATED */
+  {
+    Coords tc1, tc2;
+    tc1 = coords_set(0,0,0);
+    tc2 = coords_set(0,0,0);
+    Rotation tr1;
+    rot_set_rotation(tr1,0,0,0);
+    rot_set_rotation(tr1, (0)*DEG2RAD, (0)*DEG2RAD, (0)*DEG2RAD);
+    rot_mul(tr1, _aperture_var._rotation_absolute, _before_split_var._rotation_absolute);
+    rot_transpose(_aperture_var._rotation_absolute, tr1);
+    rot_mul(_before_split_var._rotation_absolute, tr1, _before_split_var._rotation_relative);
+    _before_split_var._rotation_is_identity = rot_test_identity(_before_split_var._rotation_relative);
+    tc1 = coords_set(0, 0, 0.01);
+    rot_transpose(_aperture_var._rotation_absolute, tr1);
+    tc2 = rot_apply(tr1, tc1);
+    _before_split_var._position_absolute = coords_add(_aperture_var._position_absolute, tc2);
+    tc1 = coords_sub(_aperture_var._position_absolute, _before_split_var._position_absolute);
+    _before_split_var._position_relative = rot_apply(_before_split_var._rotation_absolute, tc1);
+  } /* before_split=PSD_monitor() AT ROTATED */
+  DEBUG_COMPONENT("before_split", _before_split_var._position_absolute, _before_split_var._rotation_absolute);
+  instrument->_position_absolute[10] = _before_split_var._position_absolute;
+  instrument->_position_relative[10] = _before_split_var._position_relative;
+  _before_split_var._position_relative_is_zero = coords_test_zero(_before_split_var._position_relative);
+  instrument->counter_N[10] = instrument->counter_P[10] = instrument->counter_P2[10] = 0;
+  instrument->counter_AbsorbProp[10] = 0;
+  return(0);
+} /* _before_split_setpos */
 /* component split_at=MCPL_output() SETTING, POSITION/ROTATION */
 int _split_at_setpos(void)
 { /* sets initial component parameters, position and rotation */
   SIG_MESSAGE("[_split_at_setpos] component split_at=MCPL_output() SETTING [/home/g/.cache/mccode-mcstas/0.0.1/misc/MCPL_output.comp:92]");
   stracpy(_split_at_var._name, "split_at", 9);
   stracpy(_split_at_var._type, "MCPL_output", 12);
-  int current_setpos_index = _split_at_var._index = 10;
+  int current_setpos_index = _split_at_var._index = 11;
   _split_at_var._parameters.polarisationuse = 0;
   _split_at_var._parameters.doubleprec = 0;
   _split_at_var._parameters.verbose = 0;
@@ -9084,23 +9132,23 @@ int _split_at_setpos(void)
     Rotation tr1;
     rot_set_rotation(tr1,0,0,0);
     rot_set_rotation(tr1, (0)*DEG2RAD, (0)*DEG2RAD, (0)*DEG2RAD);
-    rot_mul(tr1, _aperture_var._rotation_absolute, _split_at_var._rotation_absolute);
-    rot_transpose(_aperture_var._rotation_absolute, tr1);
+    rot_mul(tr1, _before_split_var._rotation_absolute, _split_at_var._rotation_absolute);
+    rot_transpose(_before_split_var._rotation_absolute, tr1);
     rot_mul(_split_at_var._rotation_absolute, tr1, _split_at_var._rotation_relative);
     _split_at_var._rotation_is_identity = rot_test_identity(_split_at_var._rotation_relative);
     tc1 = coords_set(0, 0, 0.0001);
-    rot_transpose(_aperture_var._rotation_absolute, tr1);
+    rot_transpose(_before_split_var._rotation_absolute, tr1);
     tc2 = rot_apply(tr1, tc1);
-    _split_at_var._position_absolute = coords_add(_aperture_var._position_absolute, tc2);
-    tc1 = coords_sub(_aperture_var._position_absolute, _split_at_var._position_absolute);
+    _split_at_var._position_absolute = coords_add(_before_split_var._position_absolute, tc2);
+    tc1 = coords_sub(_before_split_var._position_absolute, _split_at_var._position_absolute);
     _split_at_var._position_relative = rot_apply(_split_at_var._rotation_absolute, tc1);
   } /* split_at=MCPL_output() AT ROTATED */
   DEBUG_COMPONENT("split_at", _split_at_var._position_absolute, _split_at_var._rotation_absolute);
-  instrument->_position_absolute[10] = _split_at_var._position_absolute;
-  instrument->_position_relative[10] = _split_at_var._position_relative;
+  instrument->_position_absolute[11] = _split_at_var._position_absolute;
+  instrument->_position_relative[11] = _split_at_var._position_relative;
   _split_at_var._position_relative_is_zero = coords_test_zero(_split_at_var._position_relative);
-  instrument->counter_N[10] = instrument->counter_P[10] = instrument->counter_P2[10] = 0;
-  instrument->counter_AbsorbProp[10] = 0;
+  instrument->counter_N[11] = instrument->counter_P[11] = instrument->counter_P2[11] = 0;
+  instrument->counter_AbsorbProp[11] = 0;
   return(0);
 } /* _split_at_setpos */
 _class_Source_simple *class_Source_simple_initialize(_class_Source_simple *_comp) {
@@ -9699,6 +9747,7 @@ int init(void) { /* called by mccode_main for splitRunTest_first:INITIALIZE */
   _guide2_setpos(); /* type Guide_gravity */
   _guide2_end_setpos(); /* type Arm */
   _aperture_setpos(); /* type Slit */
+  _before_split_setpos(); /* type PSD_monitor */
   _split_at_setpos(); /* type MCPL_output */
 /* call iteratively all components INITIALIZE */
   class_Source_simple_initialize(&_source_var);
@@ -9707,6 +9756,7 @@ int init(void) { /* called by mccode_main for splitRunTest_first:INITIALIZE */
   class_PSD_monitor_initialize(&_image_var);
   class_Guide_gravity_initialize(&_guide2_var);
   class_Slit_initialize(&_aperture_var);
+  class_PSD_monitor_initialize(&_before_split_var);
   class_MCPL_output_initialize(&_split_at_var);
   if (mcdotrace) display();
   DEBUG_INSTR_END();
@@ -9722,6 +9772,7 @@ int init(void) { /* called by mccode_main for splitRunTest_first:INITIALIZE */
 #pragma acc update device(_guide2_var)
 #pragma acc update device(_guide2_end_var)
 #pragma acc update device(_aperture_var)
+#pragma acc update device(_before_split_var)
 #pragma acc update device(_split_at_var)
 #pragma acc update device(_instrument_var)
 #endif
@@ -10683,7 +10734,28 @@ int raytrace(_class_particle* _particle) { /* single event propagation, called b
       _particle->_index++;
       if (!ABSORBED) { DEBUG_STATE(); }
     } /* end of component aperture [9] */
-    /* begin component split_at=MCPL_output() [10] */
+    /* begin component before_split=PSD_monitor() [10] */
+    if (!_particle->flag_nocoordschange) { // flag activated by JUMP to pass coords change
+      if (_before_split_var._rotation_is_identity) {
+        if(!_before_split_var._position_relative_is_zero) {
+          coords_get(coords_add(coords_set(x,y,z), _before_split_var._position_relative),&x, &y, &z);
+        }
+      } else {
+          mccoordschange(_before_split_var._position_relative, _before_split_var._rotation_relative, _particle);
+      }
+    }
+    if (!ABSORBED && _particle->_index == 10) {
+      _particle->flag_nocoordschange=0; /* Reset if we came here from a JUMP */
+      _particle_save = *_particle;
+      DEBUG_COMP(_before_split_var._name);
+      DEBUG_STATE();
+      class_PSD_monitor_trace(&_before_split_var, _particle);
+      if (_particle->_restore)
+        particle_restore(_particle, &_particle_save);
+      _particle->_index++;
+      if (!ABSORBED) { DEBUG_STATE(); }
+    } /* end of component before_split [10] */
+    /* begin component split_at=MCPL_output() [11] */
     if (!_particle->flag_nocoordschange) { // flag activated by JUMP to pass coords change
       if (_split_at_var._rotation_is_identity) {
         if(!_split_at_var._position_relative_is_zero) {
@@ -10693,7 +10765,7 @@ int raytrace(_class_particle* _particle) { /* single event propagation, called b
           mccoordschange(_split_at_var._position_relative, _split_at_var._rotation_relative, _particle);
       }
     }
-    if (!ABSORBED && _particle->_index == 10) {
+    if (!ABSORBED && _particle->_index == 11) {
       _particle->flag_nocoordschange=0; /* Reset if we came here from a JUMP */
       _particle_save = *_particle;
       DEBUG_COMP(_split_at_var._name);
@@ -10703,8 +10775,8 @@ int raytrace(_class_particle* _particle) { /* single event propagation, called b
         particle_restore(_particle, &_particle_save);
       _particle->_index++;
       if (!ABSORBED) { DEBUG_STATE(); }
-    } /* end of component split_at [10] */
-    if (_particle->_index > 10)
+    } /* end of component split_at [11] */
+    if (_particle->_index > 11)
       ABSORBED++; /* absorbed when passed all components */
   } /* while !ABSORBED */
 
@@ -10921,8 +10993,20 @@ void raytrace_all_funnel(unsigned long long ncount, unsigned long seed) {
          if (_particle->_restore) particle_restore(_particle, &_particle_save);
         _particle->_index++;
       }
-      // split_at
+      // before_split
       if (!ABSORBED && _particle->index == 9) {
+        if (_before_split_var._rotation_is_identity) {
+          coords_get(coords_add(coords_set(x,y,z), _before_split_var._position_relative),&x, &y, &z);
+        } else {
+          mccoordschange(_before_split_var._position_relative, _before_split_var._rotation_relative, _particle);
+        }
+        _particle_save = *_particle;
+        class_PSD_monitor_trace(&_before_split_var, _particle);
+         if (_particle->_restore) particle_restore(_particle, &_particle_save);
+        _particle->_index++;
+      }
+      // split_at
+      if (!ABSORBED && _particle->index == 10) {
         if (_split_at_var._rotation_is_identity) {
           coords_get(coords_add(coords_set(x,y,z), _split_at_var._position_relative),&x, &y, &z);
         } else {
@@ -11197,6 +11281,7 @@ int save(FILE *handle) { /* called by mccode_main for splitRunTest_first:SAVE */
   /* call iteratively all components SAVE */
   class_E_monitor_save(&_monitor_var);
   class_PSD_monitor_save(&_image_var);
+  class_PSD_monitor_save(&_before_split_var);
   class_MCPL_output_save(&_split_at_var);
   if (!handle) siminfo_close();
   return(0);
@@ -11485,6 +11570,7 @@ int finally(void) { /* called by mccode_main for splitRunTest_first:FINALLY */
 #pragma acc update host(_guide2_var)
 #pragma acc update host(_guide2_end_var)
 #pragma acc update host(_aperture_var)
+#pragma acc update host(_before_split_var)
 #pragma acc update host(_split_at_var)
 #pragma acc update host(_instrument_var)
 
@@ -11495,6 +11581,7 @@ int finally(void) { /* called by mccode_main for splitRunTest_first:FINALLY */
   class_E_monitor_finally(&_monitor_var);
   class_PSD_monitor_finally(&_image_var);
   class_Guide_gravity_finally(&_guide2_var);
+  class_PSD_monitor_finally(&_before_split_var);
   class_MCPL_output_finally(&_split_at_var);
   siminfo_close();
   return(0);
@@ -11958,6 +12045,7 @@ int display(void) { /* called by mccode_main for splitRunTest_first:DISPLAY */
   class_Guide_gravity_display(&_guide2_var);
   class_Arm_display(&_guide2_end_var);
   class_Slit_display(&_aperture_var);
+  class_PSD_monitor_display(&_before_split_var);
   class_MCPL_output_display(&_split_at_var);
   printf("MCDISPLAY: end\n");
   return(0);
@@ -11978,6 +12066,7 @@ void* _getvar_parameters(char* compname)
   if (!strcmp(compname, "guide2")) return (void *) &(_guide2_var._parameters);
   if (!strcmp(compname, "guide2_end")) return (void *) &(_guide2_end_var._parameters);
   if (!strcmp(compname, "aperture")) return (void *) &(_aperture_var._parameters);
+  if (!strcmp(compname, "before_split")) return (void *) &(_before_split_var._parameters);
   if (!strcmp(compname, "split_at")) return (void *) &(_split_at_var._parameters);
   return 0;
 }
@@ -12001,7 +12090,8 @@ int _getcomp_index(char* compname)
   if (!strcmp(compname, "guide2")) return 7;
   if (!strcmp(compname, "guide2_end")) return 8;
   if (!strcmp(compname, "aperture")) return 9;
-  if (!strcmp(compname, "split_at")) return 10;
+  if (!strcmp(compname, "before_split")) return 10;
+  if (!strcmp(compname, "split_at")) return 11;
   return -1;
 }
 

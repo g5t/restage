@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=60", "setuptools_scm>=8.0"]
+requires = ["setuptools>=60", "setuptools_scm>=8.0", "tox>=4.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,7 @@ name = "restage"
 dependencies = [
     'zenlog==1.1,',
     'platformdirs==3.11',
+    'psutil==5.9.6',
     "importlib_metadata; python_version<'3.8'",
     "mccode @ file:///home/g/Code/mccode-antlr"
 ]
@@ -17,3 +18,25 @@ restage = "restage.run:entrypoint"
 splitrun = "restage.splitrun:entrypoint"
 
 [tool.setuptools_scm]
+
+[tool.tox]
+legacy_tox_ini = """
+    [tox]
+    min_version = 4.0
+    env_list =
+        py312
+        py311
+        py310
+        py39
+        type
+
+    [testenv]
+    deps =
+        pytest
+        chopcal
+    commands = pytest test
+
+    [testenv:type]
+    deps = mypy
+    commands = mypy src
+"""

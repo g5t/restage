@@ -4,11 +4,12 @@ Utilities for interfacing with mccode.instr.Instr objects
 from mccode.instr import Instr
 
 
-def collect_parameter_dict(instr: Instr, kwargs: dict) -> dict:
+def collect_parameter_dict(instr: Instr, kwargs: dict, strict: bool = True) -> dict:
     """
     Collects the parameters from an Instr object, and updates any parameters specified in kwargs
     :param instr: Instr object
     :param kwargs: dict of parameters set by the user in, e.g., a scan
+    :param strict: if True, raises an error if a parameter is specified in kwargs that is not in instr
     :return: dict of parameters from instr and kwargs
     """
     from mccode.common.expression import Value
@@ -24,7 +25,9 @@ def collect_parameter_dict(instr: Instr, kwargs: dict) -> dict:
 
     for k, v in kwargs.items():
         if k not in parameters:
-            raise ValueError(f"Parameter {k} is not a valid parameter name")
+            if strict:
+                raise ValueError(f"Parameter {k} is not a valid parameter name")
+            continue
         if not isinstance(v, Value):
             expected_type = parameters[k].data_type
             v = Value(v, expected_type)
