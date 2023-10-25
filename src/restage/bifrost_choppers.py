@@ -75,7 +75,9 @@ def frame_overlap_chopper_speeds_phases(energy_minimum: float):
 
 def bandwidth_chopper_speeds_phases(energy_minimum: float):
     phase = _phase(PS_BW_DISTANCE, energy_minimum)
-    return SOURCE_FREQUENCY, phase, -SOURCE_FREQUENCY, -phase
+    # McStas implements disk chopper phase _strictly_ as a delay time -- and calculates the delay as phase/fabs(speed)
+    # Therefore the phase should *always* be positive, even though the second disk rotates in the opposite direction
+    return SOURCE_FREQUENCY, phase, -SOURCE_FREQUENCY, phase
 
 
 def calculate(order: float, time: float, energy: float, names: list[str] = None):
