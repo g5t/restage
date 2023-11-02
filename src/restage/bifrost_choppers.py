@@ -119,7 +119,7 @@ def is_order(value):
     return round(checker(value))
 
 
-if __name__ == '__main__':
+def script():
     from argparse import ArgumentParser
     parser = ArgumentParser('bifrost_choppers')
     parser.add_argument('-o', '--order', nargs=1, type=is_order, default=14.0,
@@ -138,5 +138,8 @@ if __name__ == '__main__':
             energy = 81.82 / wavelength / wavelength
         return energy
 
-    e0 = energy_zero(args.energy, args.wavelength)
-    main(args.order, args.time, e0)
+    main(args.order[0], args.time[0], energy_zero(args.energy, args.wavelength))
+
+
+if __name__ == '__main__':
+    script()

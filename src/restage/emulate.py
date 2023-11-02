@@ -22,7 +22,7 @@ def mccode_sim_io(instr, parameters, args: dict, detectors: list[str], file=None
     print(f'Ncount: {args.get("ncount", -1)}', file=file)
     n_pts, names, scan = parameters_to_scan(parameters, grid=grid)
     print(f'Numpoints: {n_pts}', file=file)
-    print(f'Param: {", ".join(str(p) for p in parameters)}', file=file)
+    print('\n'.join(f'Param: {name}={value}' for name, value in parameters.items()), file=file)
     print(f'end simulation', file=file)
     print(file=file)
     print('begin data', file=file)
@@ -55,7 +55,7 @@ def mccode_dat_io(instr, parameters, args: dict, detectors: list[str], lines: li
     print(f'# Date: {datetime.now():%a %b %d %H %M %Y}', file=file)
     print(f'# Ncount: {args.get("ncount", -1)}', file=file)
     print(f'# Numpoints: {n_pts}', file=file)
-    print(f'# Param: {", ".join(str(p) for p in parameters)}', file=file)
+    print('\n'.join(f'# Param: {name}={value}' for name, value in parameters.items()), file=file)
     print(f'# type: multiarray_1d({n_pts})', file=file)
     print(f'# title: Scan of {", ".join(names)}', file=file)
     print(f"# xlabel: '{', '.join(names)}'", file=file)
@@ -75,9 +75,10 @@ def mccode_dat_io(instr, parameters, args: dict, detectors: list[str], lines: li
 
 
 def mccode_dat_line(directory, parameters):
+    from math import sqrt
     from pathlib import Path
     from collections import namedtuple
-    Detector = namedtuple('Detector', ['name', 'intensity', 'error', 'count'])
+    Detector = namedtuple('Detector', ['name', 'intensity', 'error', 'count', 'norm'])
     filepath = Path(directory).joinpath('mccode.sim')
     if not filepath.exists():
         raise RuntimeError(f'No mccode.sim file found in {directory}')
@@ -86,9 +87,11 @@ def mccode_dat_line(directory, parameters):
 
     blocks = [x.split('end data')[0].strip() for x in lines.split('begin data') if 'end data' in x]
     blocks = [{k.strip(): v.strip() for k, v in [y.split(':', 1) for y in x.split('\n')]} for x in blocks]
-    detectors = [Detector(x['component'], *x['values'].split()) for x in blocks]
+    detectors = [Detector(x['component'], *x['values'].split(), x['Ncount']) for x in blocks]
 
-    line = f'{" ".join(str(v) for v in parameters.values())} {" ".join(f"{x.intensity} {x.error}" for x in detectors)}'
+    par_part = " ".join(str(v) for v in parameters.values())
+    det_part = " ".join(f"{float(x.intensity)/float(x.norm)} {float(x.error)/float(x.norm)}" for x in detectors)
+    line = f'{par_part} {det_part}'
     names = [x.name for x in detectors]
     return names, line
 

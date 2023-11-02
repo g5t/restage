@@ -149,6 +149,7 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
              minimum_particle_count=None,
              maximum_particle_count=None,
              dry_run=False,
+             callback=None, callback_arguments: dict[str, str] = None,
              **runtime_arguments):
     from zenlog import log
     from .energy import get_energy_parameter_names
@@ -176,7 +177,7 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
                              dry_run=dry_run)
     ic.enable()
     splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, grid, precision,
-                      dry_run=dry_run, **runtime_arguments)
+                      dry_run=dry_run, callback=callback, callback_arguments=callback_arguments, **runtime_arguments)
 
 
 def splitrun_pre(instr, parameters, grid, precision: dict[str, float],
@@ -227,7 +228,7 @@ def _pre_step(instr, entry, names, precision, translate, kw, min_pc, max_pc, dry
 
 
 def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, grid, precision: dict[str, float],
-                      summary=True, dry_run=False,
+                      summary=True, dry_run=False, callback=None, callback_arguments: dict[str, str] = None,
                       **runtime_arguments):
     from pathlib import Path
     from .cache import cache_instr, cache_get_simulation
@@ -280,6 +281,14 @@ def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, gri
             # the data file has *all* **scanned** parameters recorded for each step:
             detectors, line = mccode_dat_line(runtime_arguments['dir'], {k: v for k,v in zip(names, values)})
             dat_lines.append(line)
+        if callback is not None:
+            arguments = {}
+            arg_names = names + ['number', 'n_pts', 'pars', 'dir', 'arguments']
+            arg_values = values + [number, n_pts, pars, runtime_arguments['dir'], runtime_arguments]
+            for x, v in zip(names, values):
+                if x in callback_arguments:
+                    arguments[callback_arguments[x]] = v
+            callback(**arguments)
 
     if summary and not dry_run:
         with args['dir'].joinpath('mccode.sim').open('w') as f:
