@@ -71,7 +71,7 @@ class MyTestCase(unittest.TestCase):
 
     def test_simulation(self):
         from restage import SimulationTableEntry, SimulationEntry
-        from mccode.common import Value
+        from mccode_antlr.common import Value
         name = 'super_instr_2'
         parameters = ['par1', 'par2', 'par3', 'par4']
         entry = SimulationTableEntry(parameters=parameters, name=name)
@@ -108,8 +108,6 @@ class MyTestCase(unittest.TestCase):
 
         # So it's up to the user to specify the correct parameters to retrieve the correct simulation,
         # or to filter on the returned values for the most-appropriate simulation.
-
-
 
 
 if __name__ == '__main__':

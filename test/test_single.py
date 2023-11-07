@@ -86,7 +86,7 @@ class SplitRunTestCase(unittest.TestCase):
         from pathlib import Path
         from tempfile import mkdtemp
         from math import pi, asin, sqrt
-        from mccode.loader import parse_mcstas_instr
+        from mccode_antlr.loader import parse_mcstas_instr
         d_spacing = 3.355  # (002) for Highly-ordered Pyrolytic Graphite
         mean_energy = 5.0
         energy_width = 1.0
@@ -155,7 +155,6 @@ class SplitRunTestCase(unittest.TestCase):
         # check the scan directory for output
         for x in self.dir.glob('*'):
             print(x)
-
 
 
 if __name__ == '__main__':

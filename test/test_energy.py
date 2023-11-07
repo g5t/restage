@@ -2,7 +2,7 @@ import unittest
 
 class BIFROSTEnergyTestCase(unittest.TestCase):
     def setUp(self):
-        from mccode.loader import parse_mcstas_instr
+        from mccode_antlr.loader import parse_mcstas_instr
         instr = f"""DEFINE INSTRUMENT this_IS_NOT_BIFROST(
         ps1speed, ps1phase, ps2speed, ps2phase, fo1speed, fo1phase, bw1speed, bw1phase, bw2speed, bw2phase
         )

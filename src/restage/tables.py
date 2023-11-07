@@ -285,8 +285,11 @@ class NexusStructureEntry:
 
     def __post_init__(self):
         if len(self.eniius_version) == 0:
-            from eniius import __version__
-            self.eniius_version = __version__
+            try:
+                from eniius import __version__
+                self.eniius_version = __version__
+            except ImportError:
+                self.eniius_version = 'unknown'
 
     @staticmethod
     def columns():
@@ -324,7 +327,7 @@ class InstrEntry:
 
     def __post_init__(self):
         if len(self.mccode_version) == 0:
-            from mccode import __version__
+            from mccode_antlr import __version__
             self.mccode_version = __version__
 
     @staticmethod

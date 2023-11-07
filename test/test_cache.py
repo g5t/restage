@@ -7,7 +7,7 @@ class CacheTestCase(unittest.TestCase):
         from tempfile import mkdtemp
         import restage.cache
         from restage.database import Database
-        from mccode.loader import parse_mcstas_instr
+        from mccode_antlr.loader import parse_mcstas_instr
         self.db_dir = Path(mkdtemp())
         self.db_file = self.db_dir.joinpath('test_database.db')
         self.db = Database(self.db_file)
@@ -47,8 +47,8 @@ class CacheTestCase(unittest.TestCase):
     def test_simple_instr_file(self):
         from restage import InstrEntry
         from restage.cache import cache_instr
-        import mccode
-        mccode_version = mccode.__version__
+        import mccode_antlr
+        mccode_version = mccode_antlr.__version__
         file_contents = str(self.instr)  # ideally this would be contents, but the parsed representation adds things
         binary_path = '/not/a/real/binary/path'
         retrieved = cache_instr(self.instr, mccode_version=mccode_version, binary_path=binary_path)
@@ -67,8 +67,8 @@ class CacheTestCase(unittest.TestCase):
         from restage import SimulationTableEntry, SimulationEntry
         from restage.instr import collect_parameter
         from restage.cache import cache_instr, cache_simulation_table
-        import mccode
-        mccode_version = mccode.__version__
+        import mccode_antlr
+        mccode_version = mccode_antlr.__version__
         binary_path = '/not/a/real/binary/path'
         instr_entry = cache_instr(self.instr, mccode_version=mccode_version, binary_path=binary_path)
 
@@ -87,8 +87,8 @@ class CacheTestCase(unittest.TestCase):
         from restage.tables import SimulationEntry, best_simulation_entry_match
         from restage.instr import collect_parameter
         from restage.cache import cache_instr, cache_simulation, cache_has_simulation, cache_get_simulation
-        import mccode
-        mccode_version = mccode.__version__
+        import mccode_antlr
+        mccode_version = mccode_antlr.__version__
         binary_path = '/not/a/real/binary/path'
         instr_entry = cache_instr(self.instr, mccode_version=mccode_version, binary_path=binary_path)
 
@@ -125,7 +125,6 @@ class CacheTestCase(unittest.TestCase):
             self.assertEqual(len(matches), 3)
             best = best_simulation_entry_match(matches, SimulationEntry(par))
             self.assertEqual(best.ncount, 10000+n)
-
 
 
 if __name__ == '__main__':

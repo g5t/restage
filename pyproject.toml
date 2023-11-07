@@ -10,7 +10,6 @@ dependencies = [
     'psutil==5.9.6',
     "importlib_metadata; python_version<'3.8'",
     'mccode-antlr',
-    'eniius @ git+https://github.com/g5t/eniius.git@antlr'
 ]
 readme = "README.md"
 authors = [
