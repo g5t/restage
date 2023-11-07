@@ -12,6 +12,13 @@ dependencies = [
     'mccode-antlr',
     'eniius @ git+https://github.com/g5t/eniius.git@antlr'
 ]
+readme = "README.md"
+authors = [
+    { name = "Gregory Tucker", email = "gregory.tucker@ess.eu" },
+]
+classifiers = [
+    "License :: OSI Approved :: BSD License",
+]
 dynamic = ["version"]
 
 [project.scripts]
