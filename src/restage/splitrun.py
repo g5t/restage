@@ -129,7 +129,7 @@ def entrypoint():
 
 
 def splitrun_from_file(args, parameters, precision):
-    from mccode.loader import load_mcstas_instr
+    from mccode_antlr.loader import load_mcstas_instr
     instr = load_mcstas_instr(args.instrument[0])
     splitrun(instr, parameters, precision, split_at=args.split_at[0], grid=args.mesh,
              seed=args.seed[0] if args.seed is not None else None,
@@ -324,7 +324,7 @@ def do_primary_simulation(sit: SimulationEntry,
     from zenlog import log
     from pathlib import Path
     from functools import partial
-    from mccode.compiler.c import run_compiled_instrument, CBinaryTarget
+    from mccode_antlr.compiler.c import run_compiled_instrument, CBinaryTarget
     from .cache import directory_under_module_data_path
     # create a directory for this simulation based on the uuid generated for the simulation entry
     work_dir = directory_under_module_data_path('sim', prefix=f'p_{instr_file_entry.id}_')
@@ -415,9 +415,9 @@ def do_secondary_simulation(p_sit: SimulationEntry, entry: InstrEntry, pars: dic
                             dry_run: bool = False):
     from pathlib import Path
     from shutil import copy
-    from mccode.compiler.c import run_compiled_instrument, CBinaryTarget
+    from mccode_antlr.compiler.c import run_compiled_instrument, CBinaryTarget
     from .mcpl import mcpl_real_filename
-    from mccode.loader import write_combined_mccode_sims
+    from mccode_antlr.loader import write_combined_mccode_sims
 
     if 'mcpl_filename' in p_sit.parameter_values and p_sit.parameter_values['mcpl_filename'].is_str and \
             p_sit.parameter_values['mcpl_filename'].value is not None and \

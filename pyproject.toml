@@ -9,7 +9,8 @@ dependencies = [
     'platformdirs==3.11',
     'psutil==5.9.6',
     "importlib_metadata; python_version<'3.8'",
-    'mccode @ git+ssh://git@github.com/g5t/mccode-antlr.git'
+    'mccode-antlr',
+    'eniius @ git+https://github.com/g5t/eniius.git@antlr'
 ]
 dynamic = ["version"]
 

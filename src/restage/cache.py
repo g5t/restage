@@ -1,4 +1,4 @@
-from mccode.instr import Instr
+from mccode_antlr.instr import Instr
 from .tables import InstrEntry, SimulationTableEntry, SimulationEntry
 
 
@@ -36,15 +36,15 @@ def directory_under_module_data_path(sub: str, prefix=None, suffix=None, name=No
 
 
 def _compile_instr(entry: InstrEntry, instr: Instr, config: dict = None, target=None, generator=None):
-    from mccode import __version__
-    from mccode.compiler.c import compile_instrument, CBinaryTarget
+    from mccode_antlr import __version__
+    from mccode_antlr.compiler.c import compile_instrument, CBinaryTarget
     if config is None:
         config = dict(default_main=True, enable_trace=False, portable=False, include_runtime=True,
                       embed_instrument_file=False, verbose=False)
     if target is None:
         target = CBinaryTarget(mpi=False, acc=False, count=1, nexus=False)
     if generator is None:
-        from mccode.translators.target import MCSTAS_GENERATOR
+        from mccode_antlr.translators.target import MCSTAS_GENERATOR
         generator = MCSTAS_GENERATOR
 
     output = module_data_path('bin').joinpath(entry.id)
@@ -117,7 +117,7 @@ def cache_simulation(entry: InstrEntry, simulation: SimulationEntry):
 def _cleanup_instr_table(allow_different=True):
     """Look through the cache tables and remove any entries which are no longer valid"""
     from pathlib import Path
-    from mccode import __version__
+    from mccode_antlr import __version__
     entries = DATABASE.all_instr_files()
     for entry in entries:
         if not entry.binary_path or not Path(entry.binary_path).exists():

@@ -1,7 +1,7 @@
 """
-Utilities for interfacing with mccode.instr.Instr objects
+Utilities for interfacing with mccode_antlr.instr.Instr objects
 """
-from mccode.instr import Instr
+from mccode_antlr.instr import Instr
 
 
 def collect_parameter_dict(instr: Instr, kwargs: dict, strict: bool = True) -> dict:
@@ -12,7 +12,7 @@ def collect_parameter_dict(instr: Instr, kwargs: dict, strict: bool = True) -> d
     :param strict: if True, raises an error if a parameter is specified in kwargs that is not in instr
     :return: dict of parameters from instr and kwargs
     """
-    from mccode.common.expression import Value
+    from mccode_antlr.common.expression import Value
     parameters = {p.name: p.value for p in instr.parameters}
     for k, v in parameters.items():
         if not v.is_singular:

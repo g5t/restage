@@ -4,7 +4,7 @@ from .range import MRange
 
 def make_scan_parser():
     from argparse import ArgumentParser
-    parser = ArgumentParser('mcbifrost_scan')
+    parser = ArgumentParser('restage_scan')
     parser.add_argument('primary', nargs=1, type=str, default=None,
                         help='Primary spectrometer `.instr` file name')
     parser.add_argument('secondary', nargs=1, type=str, default=None,
@@ -36,13 +36,11 @@ def run_point(args, parameters):
 
 
 def entrypoint():
-    """Entrypoint for the mcbifrost_run command."""
+    """Entrypoint for the restage_scan command."""
     from .energy import bifrost_translate_energy_to_chopper_parameters
     from .range import parameters_to_scan
     args, parameters = parse_scan()
     n_points, names, scan = parameters_to_scan(parameters)
-    print('Now running mcbifrost_run')
     for i, p in enumerate(scan):
         point_parameters = bifrost_translate_energy_to_chopper_parameters({k: v for k, v in zip(names, p)})
-        print(f'Point {i} of {n_points}:')
         run_point(args, point_parameters)

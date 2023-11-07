@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from mccode.common import Value
+from mccode_antlr.common import Value
 
 
 def uuid():

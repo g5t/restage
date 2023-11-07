@@ -97,7 +97,7 @@ def mccode_dat_line(directory, parameters):
 
 
 def combine_mccode_dats_in_directories(directories: list[Path], output: Path):
-    from mccode.loader import write_combined_mccode_dats
+    from mccode_antlr.loader import write_combined_mccode_dats
     dat_names = [x.name for x in directories[0].glob('*.dat')]
     for directory in directories[1:]:
         dir_dat_names = [x.name for x in directory.glob('*.dat')]
@@ -112,7 +112,7 @@ def combine_mccode_dats_in_directories(directories: list[Path], output: Path):
 
 
 def combine_mccode_sims_in_directories(directories: list[Path], output: Path):
-    from mccode.loader import write_combined_mccode_sims
+    from mccode_antlr.loader import write_combined_mccode_sims
     sim_names = [x.name for x in directories[0].glob('*.sim')]
     for directory in directories[1:]:
         dir_sim_names = [x.name for x in directory.glob('*.sim')]
