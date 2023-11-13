@@ -13,6 +13,14 @@ class SingleTestCase(unittest.TestCase):
         self.assertEqual(args.split_at, ['here'])
         self.assertTrue(args.mesh)
 
+    def test_mixed_parsing(self):
+        from restage.splitrun import sort_args
+        args = self.parser.parse_args(sort_args(['test.instr', '-m', 'a=1', 'b=2', '--split-at=here']))
+        self.assertEqual(args.instrument, ['test.instr'])
+        self.assertEqual(args.parameters, ['a=1', 'b=2'])
+        self.assertEqual(args.split_at, ['here'])
+        self.assertTrue(args.mesh)
+
     def test_mccode_flags(self):
         args = self.parser.parse_args(['test.instr', '-s', '123456', '-n', '-1', '-d', '/a/dir', '-t', '-g'])
         self.assertEqual(args.seed, [123456])

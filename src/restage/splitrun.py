@@ -116,7 +116,28 @@ def parse_splitrun_precision(unparsed: list[str]) -> dict[str, float]:
     return precision
 
 
+def sort_args(args: list[str]) -> list[str]:
+    """Take the list of arguments and sort them into the correct order for splitrun"""
+    # TODO this is a bit of a hack, but it works for now
+    first, last = [], []
+    k = 0
+    while k < len(args):
+        if args[k].startswith('-'):
+            first.append(args[k])
+            k += 1
+            if '=' not in first[-1] and k < len(args) and not args[k].startswith('-') and '=' not in args[k]:
+                first.append(args[k])
+                k += 1
+        else:
+            last.append(args[k])
+            k += 1
+    return first + last
+
+
 def parse_splitrun():
+    import sys
+    sys.argv[1:] = sort_args(sys.argv[1:])
+
     args = make_splitrun_parser().parse_args()
     parameters = parse_splitrun_parameters(args.parameters)
     precision = parse_splitrun_precision(args.P)
