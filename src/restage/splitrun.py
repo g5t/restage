@@ -9,7 +9,7 @@ def make_splitrun_parser():
     from argparse import ArgumentParser
     parser = ArgumentParser('splitrun')
     aa = parser.add_argument
-    aa('instrument', nargs=1, type=str, default=None, help='Instrument `.instr` file name')
+    aa('instrument', nargs=1, type=str, default=None, help='Instrument `.instr` file name or serialised HDF5 Instr object')
     aa('parameters', nargs='*', type=str, default=None)
     aa('--split-at', nargs=1, type=str, default='mcpl_split',
        help='Component at which to split -- must exist in instr')
@@ -150,8 +150,8 @@ def entrypoint():
 
 
 def splitrun_from_file(args, parameters, precision):
-    from mccode_antlr.loader import load_mcstas_instr
-    instr = load_mcstas_instr(args.instrument[0])
+    from .instr import load_instr
+    instr = load_instr(args.instrument[0])
     splitrun(instr, parameters, precision, split_at=args.split_at[0], grid=args.mesh,
              seed=args.seed[0] if args.seed is not None else None,
              ncount=args.ncount[0] if args.ncount is not None else None,

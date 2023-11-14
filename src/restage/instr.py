@@ -1,7 +1,25 @@
 """
 Utilities for interfacing with mccode_antlr.instr.Instr objects
 """
+from pathlib import Path
+from typing import Union
 from mccode_antlr.instr import Instr
+
+
+def load_instr(filepath: Union[str, Path]) -> Instr:
+    """Loads an Instr object from a .instr file or a HDF5 file"""
+    from mccode_antlr.loader import load_mcstas_instr
+    from mccode_antlr.io import load_hdf5
+
+    if not isinstance(filepath, Path):
+        filepath = Path(filepath)
+    if not filepath.exists() or not filepath.is_file():
+        raise ValueError('The provided filepath does not exist or is not a file')
+
+    if filepath.suffix == '.instr':
+        return load_mcstas_instr(filepath)
+
+    return load_hdf5(filepath)
 
 
 def collect_parameter_dict(instr: Instr, kwargs: dict, strict: bool = True) -> dict:
@@ -44,3 +62,5 @@ def collect_parameter(instr: Instr, **kwargs) -> dict:
     :return: dict of parameters from instr and kwargs
     """
     return collect_parameter_dict(instr, kwargs)
+
+
