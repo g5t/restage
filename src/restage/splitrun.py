@@ -9,17 +9,18 @@ def make_splitrun_parser():
     from argparse import ArgumentParser
     parser = ArgumentParser('splitrun')
     aa = parser.add_argument
-    aa('instrument', nargs=1, type=str, default=None, help='Instrument `.instr` file name or serialised HDF5 Instr object')
+    parser = ArgumentParser('splitrun')
+    aa = parser.add_argument
+    aa('instrument', nargs=1, type=str, default=None,
+       help='Instrument `.instr` file name or serialised HDF5 Instr object')
     aa('parameters', nargs='*', type=str, default=None)
-    aa('--split-at', nargs=1, type=str, default='mcpl_split',
-       help='Component at which to split -- must exist in instr')
+    aa('-n', nargs=1, type=int, default=None, help='Number of neutrons to simulate')
     aa('-m', '--mesh', action='store_true', default=False, help='N-dimensional mesh scan')
-    # the following are McCode runtime arguments which might be used by the instrument
-    aa('-s', '--seed', nargs=1, type=int, default=None, help='Random number generator seed')
-    aa('-n', '--ncount', nargs=1, type=int, default=None, help='Number of neutrons to simulate')
     aa('-d', '--dir', nargs=1, type=str, default=None, help='Output directory')
+    aa('-s', '--seed', nargs=1, type=int, default=None, help='Random number generator seed')
     aa('-t', '--trace', action='store_true', default=False, help='Enable tracing')
-    aa('-g', '--gravitation', action='store_true', default=False, help='Enable gravitation for all trajectories')
+    aa('-g', '--gravitation', action='store_true', default=False,
+       help='Enable gravitation for all trajectories')
     aa('--bufsiz', nargs=1, type=int, default=None, help='Monitor_nD list/buffer-size')
     aa('--format', nargs=1, type=str, default=None, help='Output data files using FORMAT')
     aa('--nmin', nargs=1, type=int, default=None,
@@ -28,7 +29,11 @@ def make_splitrun_parser():
        help='Maximum number of particles to simulate during first instrument simulations')
     aa('--dryrun', action='store_true', default=False,
        help='Do not run any simulations, just print the commands')
+    # splitrun controlling parameters
+    aa('--split-at', nargs=1, type=str, default=['mcpl_split'],
+       help='Component at which to split -- DEFAULT: mcpl_split')
     aa('-P', action='append', default=[], help='Cache parameter matching precision')
+
     # Other McCode runtime arguments exist, but are likely not used during a scan:
     # --no-output-files             Do not write any data files
     # -i, --info                    Detailed instrument information
