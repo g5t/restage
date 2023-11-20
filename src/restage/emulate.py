@@ -90,7 +90,9 @@ def mccode_dat_line(directory, parameters):
     detectors = [Detector(x['component'], *x['values'].split(), x['Ncount']) for x in blocks]
 
     par_part = " ".join(str(v) for v in parameters.values())
-    det_part = " ".join(f"{float(x.intensity)/float(x.norm)} {float(x.error)/float(x.norm)}" for x in detectors)
+    # det_part = " ".join(f"{float(x.intensity)/float(x.norm)} {float(x.error)/float(x.norm)}" for x in detectors)
+    # The McCode Detector output is already something like normalized counts
+    det_part = " ".join(f"{float(x.intensity)} {float(x.error)}" for x in detectors)
     line = f'{par_part} {det_part}'
     names = [x.name for x in detectors]
     return names, line

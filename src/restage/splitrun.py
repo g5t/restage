@@ -14,7 +14,7 @@ def make_splitrun_parser():
     aa('instrument', nargs=1, type=str, default=None,
        help='Instrument `.instr` file name or serialised HDF5 Instr object')
     aa('parameters', nargs='*', type=str, default=None)
-    aa('-n', nargs=1, type=int, default=None, help='Number of neutrons to simulate')
+    aa('-n', '--ncount', nargs=1, type=int, default=None, help='Number of neutrons to simulate')
     aa('-m', '--mesh', action='store_true', default=False, help='N-dimensional mesh scan')
     aa('-d', '--dir', nargs=1, type=str, default=None, help='Output directory')
     aa('-s', '--seed', nargs=1, type=int, default=None, help='Random number generator seed')
@@ -233,6 +233,11 @@ def splitrun_pre(instr, parameters, grid, precision: dict[str, float],
     # from joblib import Parallel, delayed
     # Parallel(n_jobs=-3)(delayed(step)(values) for values in scan)
 
+    # If the parameters are empty, we still need to run the simulation once:
+    if len(scan) == 0:
+        step([])
+        return entry
+
     for values in scan:
         step(values)
     return entry
@@ -289,11 +294,13 @@ def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, gri
     for number, values in enumerate(scan):
         # convert, e.g., energy parameters to chopper parameters:
         pars = translate({n: v for n, v in zip(names, values)})
+        # parameters for the primary instrument:
+        primary_pars = {k: v for k, v in pars.items() if k in pre_parameters}
         # parameters for the secondary instrument:
         secondary_pars = {k: v for k, v in pars.items() if k in post_parameters}
         # use the parameters for the primary instrument to construct a (partial) simulation entry for matching
-        table_parameters = collect_parameter_dict(pre, pars, strict=True)  # maybe this shouldn't be strict?
-        primary_sent = SimulationEntry(table_parameters, precision=precision, **sit_kw)
+        primary_table_parameters = collect_parameter_dict(pre, primary_pars, strict=True)
+        primary_sent = SimulationEntry(primary_table_parameters, precision=precision, **sit_kw)
         # and use it to retrieve the already-simulated primary instrument details:
         sim_entry = best_simulation_entry_match(cache_get_simulation(pre_entry, primary_sent), primary_sent)
         # now we can use the best primary simulation entry to perform the secondary simulation

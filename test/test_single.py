@@ -108,9 +108,11 @@ class SplitRunTestCase(unittest.TestCase):
         COMPONENT source = Source_simple(yheight=0.25, xwidth=0.2, dist=1.5, focus_xw=0.06, focus_yh=0.12,
                                          E0={mean_energy}, dE={energy_width})
                            AT (0, 0, 0) RELATIVE origin
-        COMPONENT guide1 = Guide_gravity(w1 = 0.06, h1 = 0.12, w2 = 0.05, h2 = 0.1, l = 15, m = 4) 
+        COMPONENT m0 = PSD_monitor(xwidth=0.1, yheight=0.15, nx=100, ny=160, restore_neutron=1) AT (0, 0, 0.01) RELATIVE PREVIOUS
+        COMPONENT guide1 = Guide_gravity(w1 = 0.06, h1 = 0.12, w2 = 0.05, h2 = 0.1, l = 15, m = 8) 
                           AT (0, 0, 1.5) RELATIVE  PREVIOUS
         COMPONENT guide1_end = Arm() AT (0, 0, 15) RELATIVE PREVIOUS
+        COMPONENT m1 = PSD_monitor(xwidth=0.1, yheight=0.15, nx=100, ny=160, restore_neutron=1) AT (0, 0, 0.01) RELATIVE PREVIOUS
         COMPONENT monitor = E_monitor(xwidth=0.05, yheight=0.1, nE=50,
                                       Emin={mean_energy - 2*energy_width}, Emax={mean_energy + 2*energy_width})
                           AT (0, 0, 0.01) RELATIVE PREVIOUS
@@ -158,7 +160,7 @@ class SplitRunTestCase(unittest.TestCase):
             output.mkdir(parents=True)
 
         # run the scan
-        splitrun(self.instr, scan, split_at='split_at', grid=False, ncount=10_000, dir=output)
+        splitrun(self.instr, scan, precision={}, split_at='split_at', grid=False, ncount=10_000, dir=output)
 
         # check the scan directory for output
         for x in self.dir.glob('*'):
