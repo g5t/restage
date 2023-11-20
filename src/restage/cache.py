@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from mccode_antlr.instr import Instr
 from .tables import InstrEntry, SimulationTableEntry, SimulationEntry
 
@@ -35,7 +37,7 @@ def directory_under_module_data_path(sub: str, prefix=None, suffix=None, name=No
     return Path(mkdtemp(dir=under, prefix=prefix or '', suffix=suffix or ''))
 
 
-def _compile_instr(entry: InstrEntry, instr: Instr, config: dict = None, target=None, generator=None):
+def _compile_instr(entry: InstrEntry, instr: Instr, config: dict | None = None, target=None, generator=None):
     from mccode_antlr import __version__
     from mccode_antlr.compiler.c import compile_instrument, CBinaryTarget
     if config is None:

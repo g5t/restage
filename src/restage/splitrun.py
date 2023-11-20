@@ -302,8 +302,8 @@ def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, gri
             arguments = {}
             arg_names = names + ['number', 'n_pts', 'pars', 'dir', 'arguments']
             arg_values = values + [number, n_pts, pars, runtime_arguments['dir'], runtime_arguments]
-            for x, v in zip(names, values):
-                if x in callback_arguments:
+            for x, v in zip(arg_names, arg_values):
+                if callback_arguments is not None and x in callback_arguments:
                     arguments[callback_arguments[x]] = v
             callback(**arguments)
 
