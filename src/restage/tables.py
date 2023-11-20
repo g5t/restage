@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from mccode_antlr.common import Value
 
@@ -19,8 +21,8 @@ COMMON_COLUMNS = ['seed', 'ncount', 'output_path', 'gravitation', 'creation', 'l
 class SimulationEntry:
     """A class to represent the primary parameters of a simulation which constitute an entry in a specific table"""
     parameter_values: dict[str, Value]
-    seed: int = None
-    ncount: int = None
+    seed: int | None = None
+    ncount: int | None = None
     output_path: str = field(default_factory=str)
     gravitation: bool = False
     precision: dict[str, float] = field(default_factory=dict)

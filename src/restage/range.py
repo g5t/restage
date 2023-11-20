@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Union
 
 
@@ -87,6 +89,9 @@ class Singular:
         self.value = value
         self.maximum = maximum
 
+    def __eq__(self, other):
+        return self.value == other.value and self.maximum == other.maximum
+
     def __str__(self):
         return f'{self.value}(up to {self.maximum} times)'
 
@@ -158,7 +163,6 @@ def parameters_to_scan(parameters: dict[str, Union[list, MRange, Singular]], gri
     :parameter parameters: A dictionary of ranged parameters.
     :parameter grid: Controls how the parameters are iterated; True implies a grid scan, False implies a linear scan.
     """
-    from icecream import ic
     if grid:
         for k, v in parameters.items():
             if isinstance(v, Singular):
@@ -179,12 +183,10 @@ def parameters_to_scan(parameters: dict[str, Union[list, MRange, Singular]], gri
         n_max = max([len(v) for v in values])
         for i, v in enumerate(values):
             if len(v) > 1 and len(v) != n_max:
-                others = [names[i] for i, n in enumerate(values) if len(n) == n_max]
-                par = 'parameters' if len(others) > 1 else 'parameter'
-                have = 'have' if len(others) > 1 else 'has'
-                others = ', '.join(others)
-                raise ValueError(f'Parameter {names[i]} has {len(v)} values, but {par} {others} {have} {n_max}')
-        ic(values)
+                oth = [names[i] for i, n in enumerate(values) if len(n) == n_max]
+                par = 'parameters' if len(oth) > 1 else 'parameter'
+                have = 'have' if len(oth) > 1 else 'has'
+                raise ValueError(f'Parameter {names[i]} has {len(v)} values, but {par} {", ".join(oth)} {have} {n_max}')
         return n_max, names, zip(*[v if len(v) > 1 else Singular(v[0], n_max) for v in values])
 
 
@@ -211,4 +213,19 @@ def parse_command_line_parameters(unparsed: list[str]) -> dict[str, Union[Singul
         else:
             raise ValueError(f'Invalid parameter: {unparsed[index]}')
         index += 1
+    return ranges
+
+
+def parse_scan_parameters(unparsed: list[str]) -> dict[str, MRange | Singular]:
+    """Parse a list of input parameters into a dictionary of MRange or Singular objects.
+
+    :parameter unparsed: A list of parameters.
+    :return: A dictionary of MRange or Singular objects. The Singular objects have their maximum length set to the
+             maximum iterations of all the ranges to avoid infinite iterations.
+    """
+    ranges = parse_command_line_parameters(unparsed)
+    max_length = max([len(v) for v in ranges.values() if isinstance(v, MRange)])
+    for k, v in ranges.items():
+        if isinstance(v, Singular) and v.maximum is None:
+            ranges[k] = Singular(v.value, max_length)
     return ranges

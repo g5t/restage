@@ -1,6 +1,4 @@
 from pathlib import Path
-from icecream import ic
-
 
 def mccode_sim_io(instr, parameters, args: dict, detectors: list[str], file=None, grid: bool = False):
     from datetime import datetime

@@ -1,5 +1,4 @@
-
-from .range import MRange
+from __future__ import annotations
 
 
 def make_scan_parser():
@@ -15,16 +14,8 @@ def make_scan_parser():
     return parser
 
 
-def parse_scan_parameters(unparsed: list[str]) -> dict[str, MRange]:
-    """Parse a list of input parameters into a dictionary of MRange objects.
-
-    :parameter unparsed: A list of ranged parameters.
-    """
-    from .range import parse_list
-    return parse_list(MRange, unparsed)
-
-
 def parse_scan():
+    from .range import parse_scan_parameters
     args = make_scan_parser().parse_args()
     parameters = parse_scan_parameters(args.parameters)
     return args, parameters

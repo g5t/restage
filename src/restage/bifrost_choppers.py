@@ -1,4 +1,6 @@
 """Utilities for calculating chopper values, duplicated from old McStas instrument"""
+from __future__ import annotations
+
 
 SOURCE_FREQUENCY = 14.  # Hz
 # PuleHighFluxOffset
@@ -80,9 +82,9 @@ def bandwidth_chopper_speeds_phases(energy_minimum: float):
     return SOURCE_FREQUENCY, phase, -SOURCE_FREQUENCY, phase
 
 
-def calculate(order: float, time: float, energy: float, names: list[str] = None):
+def calculate(order: float, time: float, energy: float, names: list[str] | None = None):
     if names is None or len(names) != 6:
-        names = 'ps1', 'ps2', 'fo1', 'fo2', 'bw1', 'bw2'
+        names = ['ps1', 'ps2', 'fo1', 'fo2', 'bw1', 'bw2']
     a, b, c, d, e, f = names
     s, p = 'speed', 'phase'
     r = dict()
@@ -92,9 +94,9 @@ def calculate(order: float, time: float, energy: float, names: list[str] = None)
     return r
 
 
-def main(order: float, time: float, energy: float, names: list[str] = None):
+def main(order: float, time: float, energy: float, names: list[str] | None = None):
     if names is None or len(names) != 6:
-        names = 'ps1', 'ps2', 'fo1', 'fo2', 'bw1', 'bw2'
+        names = ['ps1', 'ps2', 'fo1', 'fo2', 'bw1', 'bw2']
     rep = calculate(order, time, energy, names)
     print(' '.join([f'{k}={v}' for k, v in rep.items()]))
 
@@ -133,7 +135,7 @@ def script():
                        help='Maximum wavelength of the incident neutron bandwidth in angstrom')
     args = parser.parse_args()
 
-    def energy_zero(energy: float, wavelength: float = None):
+    def energy_zero(energy: float, wavelength: float | None = None):
         if wavelength is not None and wavelength > 0:
             energy = 81.82 / wavelength / wavelength
         return energy

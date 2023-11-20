@@ -1,4 +1,5 @@
-from icecream import ic
+from __future__ import annotations
+
 from typing import Union
 from pathlib import Path
 from .range import Singular, MRange
@@ -95,22 +96,6 @@ def mccode_runtime_dict_to_args_list(args: dict) -> list[str]:
     return out
 
 
-def parse_splitrun_parameters(unparsed: list[str]) -> dict[str, Union[MRange, Singular]]:
-    """Parse a list of input parameters into a dictionary of MRange or Singular objects.
-
-    :parameter unparsed: A list of parameters.
-    :return: A dictionary of MRange or Singular objects. The Singular objects have their maximum length set to the
-             maximum iterations of all the ranges to avoid infinite iterations.
-    """
-    from .range import parse_command_line_parameters
-    ranges = parse_command_line_parameters(unparsed)
-    max_length = max([len(v) for v in ranges.values() if isinstance(v, MRange)])
-    for k, v in ranges.items():
-        if isinstance(v, Singular) and v.maximum is None:
-            ranges[k] = Singular(v.value, max_length)
-    return ranges
-
-
 def parse_splitrun_precision(unparsed: list[str]) -> dict[str, float]:
     precision = {}
     for p in unparsed:
@@ -140,11 +125,12 @@ def sort_args(args: list[str]) -> list[str]:
 
 
 def parse_splitrun():
+    from .range import parse_scan_parameters
     import sys
     sys.argv[1:] = sort_args(sys.argv[1:])
 
     args = make_splitrun_parser().parse_args()
-    parameters = parse_splitrun_parameters(args.parameters)
+    parameters = parse_scan_parameters(args.parameters)
     precision = parse_splitrun_precision(args.P)
     return args, parameters, precision
 
@@ -175,7 +161,7 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
              minimum_particle_count=None,
              maximum_particle_count=None,
              dry_run=False,
-             callback=None, callback_arguments: dict[str, str] = None,
+             callback=None, callback_arguments: dict[str, str] | None = None,
              **runtime_arguments):
     from zenlog import log
     from .energy import get_energy_parameter_names
@@ -196,12 +182,11 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
         # in the primary instrument
         pre_parameters.update({k: v for k, v in parameters.items() if k in energy_parameter_names})
 
-    ic.disable()
     pre_entry = splitrun_pre(pre, pre_parameters, grid, precision, **runtime_arguments,
                              minimum_particle_count=minimum_particle_count,
                              maximum_particle_count=maximum_particle_count,
                              dry_run=dry_run)
-    ic.enable()
+
     splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, grid, precision,
                       dry_run=dry_run, callback=callback, callback_arguments=callback_arguments, **runtime_arguments)
 
@@ -214,8 +199,7 @@ def splitrun_pre(instr, parameters, grid, precision: dict[str, float],
     from .cache import cache_instr
     from .energy import energy_to_chopper_translator
     from .range import parameters_to_scan
-    from .instr import collect_parameter_dict
-    from icecream import ic
+
     # check if this instr is already represented in the module's cache database
     # if not, it is compiled and added to the cache with (hopefully sensible) defaults specified
     entry = cache_instr(instr)
@@ -259,7 +243,7 @@ def _pre_step(instr, entry, names, precision, translate, kw, min_pc, max_pc, dry
 
 
 def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, grid, precision: dict[str, float],
-                      summary=True, dry_run=False, callback=None, callback_arguments: dict[str, str] = None,
+                      summary=True, dry_run=False, callback=None, callback_arguments: dict[str, str] | None = None,
                       **runtime_arguments):
     from pathlib import Path
     from .cache import cache_instr, cache_get_simulation
@@ -350,8 +334,8 @@ def do_primary_simulation(sit: SimulationEntry,
                           instr_file_entry: InstrEntry,
                           parameters: dict,
                           args: dict,
-                          minimum_particle_count: int = None,
-                          maximum_particle_count: int = None,
+                          minimum_particle_count: int | None = None,
+                          maximum_particle_count: int | None = None,
                           dry_run: bool = False
                           ):
     from zenlog import log
@@ -376,7 +360,7 @@ def do_primary_simulation(sit: SimulationEntry,
         mcpl_filename = sit.parameter_values['mcpl_filename'].value.strip('"')
     else:
         from .tables import Value
-        ic()
+        log.info('Expected mcpl_filename parameter in primary simulation, using default')
         mcpl_filename = f'{sit.id}.mcpl'
         sit.parameter_values['mcpl_filename'] = Value.str(mcpl_filename)
     mcpl_filepath = work_dir.joinpath(mcpl_filename)
@@ -397,8 +381,8 @@ def do_primary_simulation(sit: SimulationEntry,
 
 
 def repeat_simulation_until(count, runner, args: dict, parameters, work_dir: Path, mcpl_filepath: Path,
-                            minimum_particle_count: int = None,
-                            maximum_particle_count: int = None):
+                            minimum_particle_count: int | None = None,
+                            maximum_particle_count: int | None = None):
     import random
     from functools import partial
     from zenlog import log
@@ -444,8 +428,9 @@ def repeat_simulation_until(count, runner, args: dict, parameters, work_dir: Pat
     combine_mccode_sims_in_directories(outputs, work_dir)
 
 
-def do_secondary_simulation(p_sit: SimulationEntry, entry: InstrEntry, pars: dict, args: dict[str],
+def do_secondary_simulation(p_sit: SimulationEntry, entry: InstrEntry, pars: dict, args: dict,
                             dry_run: bool = False):
+    from zenlog import log
     from pathlib import Path
     from shutil import copy
     from mccode_antlr.compiler.c import run_compiled_instrument, CBinaryTarget
@@ -457,7 +442,7 @@ def do_secondary_simulation(p_sit: SimulationEntry, entry: InstrEntry, pars: dic
             len(p_sit.parameter_values['mcpl_filename'].value):
         mcpl_filename = p_sit.parameter_values['mcpl_filename'].value.strip('"')
     else:
-        ic()
+        log.info('Expected mcpl_filename parameter in secondary simulation, using default')
         mcpl_filename = f'{p_sit.id}.mcpl'
 
     mcpl_path = mcpl_real_filename(Path(p_sit.output_path).joinpath(mcpl_filename))

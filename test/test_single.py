@@ -57,11 +57,10 @@ class SingleTestCase(unittest.TestCase):
         self.assertEqual(args.format, ['RAW'])
 
     def test_parameters(self):
-        from restage.splitrun import parse_splitrun_parameters
-        from restage.range import MRange, Singular, parameters_to_scan
+        from restage.range import MRange, Singular, parameters_to_scan, parse_scan_parameters
         args = self.parser.parse_args(['test.instr', 'a=1.0', 'b=2', 'c=3:5', 'd=blah', 'e=/data', '-m'])
         self.assertEqual(args.parameters, ['a=1.0', 'b=2', 'c=3:5', 'd=blah', 'e=/data'])
-        parameters = parse_splitrun_parameters(args.parameters)
+        parameters = parse_scan_parameters(args.parameters)
         self.assertTrue(isinstance(parameters['a'], Singular))
         self.assertTrue(isinstance(parameters['b'], Singular))
         self.assertTrue(isinstance(parameters['c'], MRange))
@@ -70,7 +69,8 @@ class SingleTestCase(unittest.TestCase):
         # Singular parameters should have their maximum repetitions set to the longest MRange
         for v in parameters.values():
             self.assertEqual(len(v), 3)
-        names, scan = parameters_to_scan(parameters)
+        n_pts, names, scan = parameters_to_scan(parameters)
+        self.assertEqual(n_pts, 3)
         self.assertEqual(names, ['a', 'b', 'c', 'd', 'e'])
         for i, values in enumerate(scan):
             self.assertEqual(len(values), 5)
@@ -143,13 +143,14 @@ class SplitRunTestCase(unittest.TestCase):
     def test_simple_scan(self):
         # Scanning a1 and a2 with a2=2*a1 should produce approximately the same intensity for all points
         # as long as a1 is between the limits of min_a1 and max_a1
-        from restage.splitrun import parse_splitrun_parameters, splitrun
+        from restage.splitrun import splitrun
+        from restage.range import parse_scan_parameters
         # for a 5 cm wide guide and 1 cm wide detector, a total of 1.6 m from each other,
         # the detector would be in the direct beam for any positive angle theta that satisfies
         #  1.6 sin(theta) - 0.005 cos(theta) <= 0.025
         # which is, approximately 0.9 degrees. We do not want to include the direct beam in the scan,
         # so we will use a minimum a2 of 6 degrees to be safe
-        scan = parse_splitrun_parameters(['a1=3:3:90', 'a2=6:6:180'])
+        scan = parse_scan_parameters(['a1=3:3:90', 'a2=6:6:180'])
 
         # The way that McCode handles directories is extremely finicky. If the _actual_ simulation directory
         # exists, the simulation will fail (even if it is empty!), but if the _parent_ directory does not exist,

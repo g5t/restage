@@ -1,12 +1,14 @@
+from __future__ import annotations
+
 from pathlib import Path
 from .tables import SimulationEntry, SimulationTableEntry, NexusStructureEntry, InstrEntry
 
 
 class Database:
     def __init__(self, db_file: Path,
-                 instr_file_table: str = None,
-                 nexus_structures_table: str = None,
-                 simulations_table: str = None,
+                 instr_file_table: str | None = None,
+                 nexus_structures_table: str | None = None,
+                 simulations_table: str | None = None,
                  # secondary_simulations_table: str = None
                  ):
         from sqlite3 import connect

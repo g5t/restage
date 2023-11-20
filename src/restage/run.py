@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from .range import Singular
 
 
@@ -32,7 +34,7 @@ def entrypoint():
     run(args, parameters)
 
 
-def run(args, parameters, overrides: dict = None):
+def run(args, parameters, overrides: dict | None = None):
     values = {k: v for k, v in parameters.items()}
     values.update(overrides or {})
 
