@@ -101,6 +101,8 @@ class SplitRunTestCase(unittest.TestCase):
             subprocess.run(['mcpl-config', '--version'], check=True)
         except FileNotFoundError:
             self.skipTest('mcpl-config not found')
+        except RuntimeError:
+            self.skipTest('mcpl-config failed')
 
     def _skip_checks(self):
         self._skip_on_windows()
@@ -152,6 +154,7 @@ class SplitRunTestCase(unittest.TestCase):
     def setUp(self) -> None:
         from pathlib import Path
         from tempfile import mkdtemp
+        self._skip_checks()
         self.instr, self.min_a1, self.max_a1 = self._define_instr()
         with Path().joinpath('splitRunTest.instr').open('w') as file:
             self.instr.to_file(file)
