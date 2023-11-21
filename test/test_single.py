@@ -106,18 +106,18 @@ class SplitRunTestCase(unittest.TestCase):
         self._skip_on_windows()
         self._skip_without_mcpl()
 
-    def setUp(self) -> None:
-        from pathlib import Path
-        from tempfile import mkdtemp
+    def _define_instr(self):
         from math import pi, asin, sqrt
         from mccode_antlr.loader import parse_mcstas_instr
-        self._skip_checks()
         d_spacing = 3.355  # (002) for Highly-ordered Pyrolytic Graphite
         mean_energy = 5.0
         energy_width = 1.0
-        mean_ki = sqrt(mean_energy / 2.7022)
-        min_ki = sqrt((mean_energy - energy_width) / 2.7022)
-        max_ki = sqrt((mean_energy + energy_width) / 2.7022)
+        hbar_sq_over_m = 2.0722  # meV Angstrom^2
+        mean_ki = sqrt(mean_energy / hbar_sq_over_m)
+        min_ki = sqrt((mean_energy - energy_width) / hbar_sq_over_m)
+        max_ki = sqrt((mean_energy + energy_width) / hbar_sq_over_m)
+        min_a1 = asin(pi / d_spacing / max_ki) * 180 / pi
+        max_a1 = asin(pi / d_spacing / min_ki) * 180 / pi
         instr = f"""
         DEFINE INSTRUMENT splitRunTest(a1=0, a2=0, virtual_source_x=0.05, virtual_source_y=0.1)
         TRACE
@@ -131,7 +131,7 @@ class SplitRunTestCase(unittest.TestCase):
         COMPONENT guide1_end = Arm() AT (0, 0, 15) RELATIVE PREVIOUS
         COMPONENT m1 = PSD_monitor(xwidth=0.1, yheight=0.15, nx=100, ny=160, restore_neutron=1) AT (0, 0, 0.01) RELATIVE PREVIOUS
         COMPONENT monitor = E_monitor(xwidth=0.05, yheight=0.1, nE=50,
-                                      Emin={mean_energy - 2*energy_width}, Emax={mean_energy + 2*energy_width})
+                                      Emin={mean_energy - 2 * energy_width}, Emax={mean_energy + 2 * energy_width})
                           AT (0, 0, 0.01) RELATIVE PREVIOUS
         COMPONENT image = PSD_monitor(xwidth=0.1, yheight=0.15, nx=100, ny=160) AT (0, 0, 0.01) RELATIVE PREVIOUS
         COMPONENT guide2 = Guide_gravity(w1 = 0.05, h1 = 0.1, l = 15, m = 8) AT (0, 0, 0.01) RELATIVE PREVIOUS
@@ -147,27 +147,28 @@ class SplitRunTestCase(unittest.TestCase):
         COMPONENT detector = Monitor(xwidth=0.01, yheight=0.05) AT (0, 0, 0.8) RELATIVE sample_arm
         END
         """
-        self.instr = parse_mcstas_instr(instr)
+        return parse_mcstas_instr(instr), min_a1, max_a1
+
+    def setUp(self) -> None:
+        from pathlib import Path
+        from tempfile import mkdtemp
+        self.instr, self.min_a1, self.max_a1 = self._define_instr()
+        with Path().joinpath('splitRunTest.instr').open('w') as file:
+            self.instr.to_file(file)
         self.dir = Path(mkdtemp())
-        self.mean_a1 = asin(pi / d_spacing / mean_ki) * 180 / pi
-        self.min_a1 = asin(pi / d_spacing / max_ki) * 180 / pi
-        self.max_a1 = asin(pi / d_spacing / min_ki) * 180 / pi
 
     def tearDown(self) -> None:
+        import shutil
         if self.dir.exists():
-            self.dir.rmdir()
+            shutil.rmtree(self.dir)
 
     def test_simple_scan(self):
         # Scanning a1 and a2 with a2=2*a1 should produce approximately the same intensity for all points
         # as long as a1 is between the limits of min_a1 and max_a1
         from restage.splitrun import splitrun
         from restage.range import parse_scan_parameters
-        # for a 5 cm wide guide and 1 cm wide detector, a total of 1.6 m from each other,
-        # the detector would be in the direct beam for any positive angle theta that satisfies
-        #  1.6 sin(theta) - 0.005 cos(theta) <= 0.025
-        # which is, approximately 0.9 degrees. We do not want to include the direct beam in the scan,
-        # so we will use a minimum a2 of 6 degrees to be safe
-        scan = parse_scan_parameters(['a1=3:3:90', 'a2=6:6:180'])
+        # since the source emits a narrow energy bandwidth, we only detect neutrons over a small (a1,a2) range
+        scan = parse_scan_parameters([f'a1={self.min_a1}:0.5:{self.max_a1}', f'a2={2*self.min_a1}:{2*self.max_a1}'])
 
         # The way that McCode handles directories is extremely finicky. If the _actual_ simulation directory
         # exists, the simulation will fail (even if it is empty!), but if the _parent_ directory does not exist,
@@ -181,8 +182,10 @@ class SplitRunTestCase(unittest.TestCase):
         splitrun(self.instr, scan, precision={}, split_at='split_at', grid=False, ncount=10_000, dir=output)
 
         # check the scan directory for output
-        for x in self.dir.glob('*'):
+        for x in self.dir.glob('**/*.dat'):
             print(x)
+
+        # It would be nice to check that the produced mccode.sim and mccode.dat files look right.
 
 
 if __name__ == '__main__':
