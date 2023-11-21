@@ -90,11 +90,28 @@ class DictWranglingTestCase(unittest.TestCase):
 
 
 class SplitRunTestCase(unittest.TestCase):
+    def _skip_on_windows(self):
+        import platform
+        if platform.system() == 'Windows':
+            self.skipTest('Skipping test on Windows')
+
+    def _skip_without_mcpl(self):
+        import subprocess
+        try:
+            subprocess.run(['mcpl-config', '--version'], check=True)
+        except FileNotFoundError:
+            self.skipTest('mcpl-config not found')
+
+    def _skip_checks(self):
+        self._skip_on_windows()
+        self._skip_without_mcpl()
+
     def setUp(self) -> None:
         from pathlib import Path
         from tempfile import mkdtemp
         from math import pi, asin, sqrt
         from mccode_antlr.loader import parse_mcstas_instr
+        self._skip_checks()
         d_spacing = 3.355  # (002) for Highly-ordered Pyrolytic Graphite
         mean_energy = 5.0
         energy_width = 1.0
