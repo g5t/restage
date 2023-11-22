@@ -218,7 +218,7 @@ def splitrun_pre(instr, parameters, grid, precision: dict[str, float],
     # Parallel(n_jobs=-3)(delayed(step)(values) for values in scan)
 
     # If the parameters are empty, we still need to run the simulation once:
-    if len(scan) == 0:
+    if n_pts == 0:
         step([])
         return entry
 
