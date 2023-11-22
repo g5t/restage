@@ -90,10 +90,13 @@ class DictWranglingTestCase(unittest.TestCase):
 
 
 class SplitRunTestCase(unittest.TestCase):
-    def _skip_on_windows(self):
-        import platform
-        if platform.system() == 'Windows':
-            self.skipTest('Skipping test on Windows')
+    def _skip_without_compiler(self):
+        import subprocess
+        from mccode_antlr.config import config
+        try:
+            subprocess.run([config['cc'].get(str), '--version'], check=True)
+        except FileNotFoundError:
+            self.skipTest(f'Compiler {config["cc"]} not found')
 
     def _skip_without_mcpl(self):
         import subprocess
@@ -105,7 +108,7 @@ class SplitRunTestCase(unittest.TestCase):
             self.skipTest('mcpl-config failed')
 
     def _skip_checks(self):
-        self._skip_on_windows()
+        self._skip_without_compiler()
         self._skip_without_mcpl()
 
     def _define_instr(self):
