@@ -217,13 +217,11 @@ def splitrun_pre(instr, parameters, grid, precision: dict[str, float],
     # from joblib import Parallel, delayed
     # Parallel(n_jobs=-3)(delayed(step)(values) for values in scan)
 
-    # If the parameters are empty, we still need to run the simulation once:
-    if n_pts == 0:
-        step([])
-        return entry
-
     for values in scan:
         step(values)
+    if n_pts == 0:
+        # If the parameters are empty, we still need to run the simulation once:
+        step([])
     return entry
 
 
