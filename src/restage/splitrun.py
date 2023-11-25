@@ -277,9 +277,9 @@ def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, gri
         # convert, e.g., energy parameters to chopper parameters:
         pars = translate({n: v for n, v in zip(names, values)})
         # parameters for the primary instrument:
-        primary_pars = {k: v for k, v in pars.items() if k in pre_parameters}
+        primary_pars = {k: v for k, v in pars.items() if pre.has_parameter(k)}
         # parameters for the secondary instrument:
-        secondary_pars = {k: v for k, v in pars.items() if k in post_parameters}
+        secondary_pars = {k: v for k, v in pars.items() if post.has_parameter(k)}
         # use the parameters for the primary instrument to construct a (partial) simulation entry for matching
         primary_table_parameters = collect_parameter_dict(pre, primary_pars, strict=True)
         primary_sent = SimulationEntry(primary_table_parameters, precision=precision, **sit_kw)
