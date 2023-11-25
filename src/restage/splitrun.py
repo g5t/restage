@@ -277,9 +277,9 @@ def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, gri
         # convert, e.g., energy parameters to chopper parameters:
         pars = translate({n: v for n, v in zip(names, values)})
         # parameters for the primary instrument:
-        primary_pars = {k: v for k, v in pars.items() if k in pre_parameters}
+        primary_pars = {k: v for k, v in pars.items() if pre.has_parameter(k)}
         # parameters for the secondary instrument:
-        secondary_pars = {k: v for k, v in pars.items() if k in post_parameters}
+        secondary_pars = {k: v for k, v in pars.items() if post.has_parameter(k)}
         # use the parameters for the primary instrument to construct a (partial) simulation entry for matching
         primary_table_parameters = collect_parameter_dict(pre, primary_pars, strict=True)
         primary_sent = SimulationEntry(primary_table_parameters, precision=precision, **sit_kw)
@@ -298,8 +298,10 @@ def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, gri
             dat_lines.append(line)
         if callback is not None:
             arguments = {}
+            # 'names' _is_ a list already
             arg_names = names + ['number', 'n_pts', 'pars', 'dir', 'arguments']
-            arg_values = values + [number, n_pts, pars, runtime_arguments['dir'], runtime_arguments]
+            # 'values' is a tuple, so we need to convert it to a list
+            arg_values = list(values) + [number, n_pts, pars, runtime_arguments['dir'], runtime_arguments]
             for x, v in zip(arg_names, arg_values):
                 if callback_arguments is not None and x in callback_arguments:
                     arguments[callback_arguments[x]] = v
