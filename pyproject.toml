@@ -9,7 +9,7 @@ dependencies = [
     'platformdirs==3.11',
     'psutil==5.9.6',
     "importlib_metadata; python_version<'3.8'",
-    'mccode-antlr[hdf5]==0.3.0',
+    'mccode-antlr[hdf5]==0.3.1',
 ]
 readme = "README.md"
 authors = [
