@@ -187,7 +187,7 @@ def parameters_to_scan(parameters: dict[str, Union[list, MRange, Singular]], gri
                 par = 'parameters' if len(oth) > 1 else 'parameter'
                 have = 'have' if len(oth) > 1 else 'has'
                 raise ValueError(f'Parameter {names[i]} has {len(v)} values, but {par} {", ".join(oth)} {have} {n_max}')
-        return n_max, names, zip(*[v if len(v) > 1 else Singular(v[0], n_max) for v in values])
+        return n_max, names, zip(*[v if len(v) > 1 else Singular(v[0] if isinstance(v, MRange) else v.value, n_max) for v in values])
 
 
 def _MRange_or_Singular(s: str):
@@ -224,7 +224,7 @@ def parse_scan_parameters(unparsed: list[str]) -> dict[str, MRange | Singular]:
              maximum iterations of all the ranges to avoid infinite iterations.
     """
     ranges = parse_command_line_parameters(unparsed)
-    max_length = max([len(v) for v in ranges.values() if isinstance(v, MRange)])
+    max_length = max(len(v) if isinstance(v, MRange) else 1 for v in ranges.values())
     for k, v in ranges.items():
         if isinstance(v, Singular) and v.maximum is None:
             ranges[k] = Singular(v.value, max_length)
