@@ -162,6 +162,7 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
              maximum_particle_count=None,
              dry_run=False,
              callback=None, callback_arguments: dict[str, str] | None = None,
+             output_split_instrs=True,
              **runtime_arguments):
     from zenlog import log
     from .energy import get_energy_parameter_names
@@ -172,6 +173,10 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
         log.error(f'The specified split-at component, {split_at}, does not exist in the instrument file')
     # splitting defines an instrument parameter in both returned instrument, 'mcpl_filename'.
     pre, post = instr.mcpl_split(split_at, remove_unused_parameters=True)
+    if output_split_instrs:
+        for p in (pre, post):
+            with open(f'{p.name}.instr', 'w') as f:
+                p.to_file(f)
     # ... reduce the parameters to those that are relevant to the two instruments.
     pre_parameters = {k: v for k, v in parameters.items() if pre.has_parameter(k)}
     post_parameters = {k: v for k, v in parameters.items() if post.has_parameter(k)}
