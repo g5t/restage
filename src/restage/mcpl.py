@@ -4,11 +4,11 @@ from pathlib import Path
 def mcpl_real_filename(filename: Path) -> Path:
     """MCPL_output from McCode instruments has the bad habit of changing the output file name silently.
     Find the _real_ output file name by looking for the expected variants"""
-    if filename.exists():
+    if filename.exists() and filename.is_file():
         return filename
-    if filename.with_suffix('.mcpl').exists():
+    if filename.with_suffix('.mcpl').exists() and filename.with_suffix('.mcpl').is_file():
         return filename.with_suffix('.mcpl')
-    if filename.with_suffix('.mcpl.gz').exists():
+    if filename.with_suffix('.mcpl.gz').exists() and filename.with_suffix('.mcpl.gz').is_file():
         return filename.with_suffix('.mcpl.gz')
     raise FileNotFoundError(f'Could not find MCPL file {filename}')
 
@@ -37,7 +37,7 @@ def mcpl_particle_count(filename):
     return int(m.group(1))
 
 
-def mcpl_merge_files(files: list[Path], filename: str, keep_originals: bool = False):
+def mcpl_merge_files(files: list[Path], filepath: Path, keep_originals: bool = False):
     """Merge a list of MCPL files into a single file using mcpltool.
 
     :param files: The list of files to merge.
@@ -51,6 +51,14 @@ def mcpl_merge_files(files: list[Path], filename: str, keep_originals: bool = Fa
     """
     from subprocess import run
     real_filenames = [mcpl_real_filename(f) for f in files]
+    # if the real filenames have .mcpl or .mcpl.gz, the merged filename should too
+    ext = ''
+    if real_filenames[0].name.endswith('.mcpl.gz'):
+        ext = '.mcpl.gz'
+    elif real_filenames[0].name.endswith('.mcpl'):
+        ext = '.mcpl'
+    filename = filepath.with_suffix(ext).as_posix()
+
     command = ['mcpltool', '--merge', filename] + [str(f) for f in real_filenames]
     result = run(command)
     if result.returncode != 0:
@@ -58,3 +66,21 @@ def mcpl_merge_files(files: list[Path], filename: str, keep_originals: bool = Fa
     if not keep_originals:
         for file in real_filenames:
             file.unlink()
+
+
+def mcpl_rename_file(source: Path, dest: Path, strict: bool = False):
+    filepath = mcpl_real_filename(source)
+    filename = filepath.name  # this could be '{name}', '{name}.mcpl', or '{name}.mcpl.gz'
+    ext = ''
+    if filepath.name.endswith('.mcpl.gz'):
+        ext = '.mcpl.gz'
+    elif filepath.name.endswith('.mcpl'):
+        ext = '.mcpl'
+
+    if not dest.name.endswith(ext):
+        if strict:
+            raise RuntimeError(f"Destination {dest} does not have extension matching {source}")
+        dest = dest.with_suffix(ext)
+
+    filepath.rename(dest)
+    return dest

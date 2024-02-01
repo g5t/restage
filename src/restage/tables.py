@@ -316,6 +316,8 @@ class NexusStructureEntry:
 class InstrEntry:
     """A class to represent the instrument file and its compiled binary when stored as an entry in a table"""
     file_contents: str
+    mpi: bool
+    acc: bool
     binary_path: str
     mccode_version: str = field(default_factory=str)
     id: str = field(default_factory=uuid)
@@ -324,8 +326,8 @@ class InstrEntry:
 
     @classmethod
     def from_query_result(cls, values):
-        fid, file_contents, binary_path, mccode_version, creation, last_access = values
-        return cls(file_contents, binary_path, mccode_version, fid, creation, last_access)
+        fid, file_contents, mpi, acc, binary_path, mccode_version, creation, last_access = values
+        return cls(file_contents, mpi != 0, acc != 0, binary_path, mccode_version, fid, creation, last_access)
 
     def __post_init__(self):
         if len(self.mccode_version) == 0:
@@ -334,12 +336,14 @@ class InstrEntry:
 
     @staticmethod
     def columns():
-        return ['id', 'file_contents', 'binary_path', 'mccode_version', 'creation', 'last_access']
+        return ['id', 'file_contents', 'mpi', 'acc', 'binary_path', 'mccode_version', 'creation', 'last_access']
 
     def values(self):
         str_values = [f"'{x}'" for x in (self.id, self.file_contents, self.binary_path, self.mccode_version)]
+        int_values = [f'{x}' for x in (self.mpi, self.acc)]
         flt_values = [f'{self.creation}', f'{self.last_access}']
-        return str_values + flt_values
+        # matches id, file_contents, mpi, acc, binary_path, mccode_version, creation, last_access order
+        return str_values[:2] + int_values + str_values[2:] + flt_values
 
     @classmethod
     def create_sql_table(cls, table_name: str = 'instr_files'):

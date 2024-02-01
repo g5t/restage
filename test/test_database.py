@@ -38,13 +38,16 @@ class MyTestCase(unittest.TestCase):
         file_contents = 'fake file contents'
         binary_path = '/not/a/real/binary/path'
         mccode_version = 'version'
+        mpi = False
+        acc = True
         instr_file_entry = InstrEntry(file_contents=file_contents, binary_path=binary_path,
-                                      mccode_version=mccode_version)
+                                      mccode_version=mccode_version, mpi=mpi, acc=acc)
         self.db.insert_instr_file(instr_file_entry)
         instr_id = instr_file_entry.id
         retrieved = self.db.retrieve_instr_file(instr_id=instr_id)
         self._check_return(retrieved, InstrEntry, {'id': instr_id, 'file_contents': file_contents,
-                                                   'binary_path': binary_path, 'mccode_version': mccode_version})
+                                                   'binary_path': binary_path, 'mccode_version': mccode_version,
+                                                   'mpi': mpi, 'acc': acc})
 
     def test_nexus_structure(self):
         from restage import NexusStructureEntry

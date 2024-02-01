@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from mccode_antlr.instr import Instr
 from .tables import InstrEntry, SimulationTableEntry, SimulationEntry
+from mccode_antlr.compiler.c import CBinaryTarget
 
 
 def setup_database(named: str):
@@ -37,40 +38,41 @@ def directory_under_module_data_path(sub: str, prefix=None, suffix=None, name=No
     return Path(mkdtemp(dir=under, prefix=prefix or '', suffix=suffix or ''))
 
 
-def _compile_instr(entry: InstrEntry, instr: Instr, config: dict | None = None, target=None, generator=None):
+def _compile_instr(entry: InstrEntry, instr: Instr, config: dict | None = None,
+                   mpi: bool = False, acc: bool = False,
+                   target=None, generator=None):
+    from tempfile import mkdtemp
     from mccode_antlr import __version__
     from mccode_antlr.compiler.c import compile_instrument, CBinaryTarget
     if config is None:
         config = dict(default_main=True, enable_trace=False, portable=False, include_runtime=True,
                       embed_instrument_file=False, verbose=False)
     if target is None:
-        target = CBinaryTarget(mpi=False, acc=False, count=1, nexus=False)
+        target = CBinaryTarget(mpi=mpi or False, acc=acc or False, count=1, nexus=False)
     if generator is None:
         from mccode_antlr.translators.target import MCSTAS_GENERATOR
         generator = MCSTAS_GENERATOR
 
-    output = module_data_path('bin').joinpath(entry.id)
-    if not output.exists():
-        output.mkdir(parents=True)
-
+    output = directory_under_module_data_path('bin')
     binary_path = compile_instrument(instr, target, output, generator=generator, config=config)
     entry.mccode_version = __version__
     entry.binary_path = str(binary_path)
     return entry
 
 
-def cache_instr(instr: Instr, mccode_version=None, binary_path=None, **kwargs) -> InstrEntry:
+def cache_instr(instr: Instr, mpi: bool = False, acc: bool = False, mccode_version=None, binary_path=None, **kwargs) -> InstrEntry:
     instr_contents = str(instr)
-    query = DATABASE.query_instr_file(search={'file_contents': instr_contents})  # returns a list[InstrTableEntry]
+    # the query returns a list[InstrTableEntry]
+    query = DATABASE.query_instr_file(search={'file_contents': instr_contents, 'mpi': mpi, 'acc': acc})
     if len(query) > 1:
         raise RuntimeError(f"Multiple entries for {instr_contents} in {DATABASE.instr_file_table}")
     elif len(query) == 1:
         return query[0]
 
-    instr_file_entry = InstrEntry(file_contents=instr_contents, binary_path=binary_path or '',
+    instr_file_entry = InstrEntry(file_contents=instr_contents, mpi=mpi, acc=acc, binary_path=binary_path or '',
                                   mccode_version=mccode_version or 'NONE')
     if binary_path is None:
-        instr_file_entry = _compile_instr(instr_file_entry, instr, **kwargs)
+        instr_file_entry = _compile_instr(instr_file_entry, instr, mpi=mpi, acc=acc, **kwargs)
 
     DATABASE.insert_instr_file(instr_file_entry)
     return instr_file_entry
