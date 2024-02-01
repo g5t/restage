@@ -113,6 +113,23 @@ class SplitRunTestCase(unittest.TestCase):
 
     def _define_instr(self):
         from math import pi, asin, sqrt
+        from antlr4 import CommonTokenStream, InputStream
+        from mccode_antlr.grammar import McInstrParser, McInstrLexer
+        from mccode_antlr.instr import InstrVisitor
+        from mccode_antlr.reader import Reader, MCSTAS_REGISTRY, LocalRegistry
+        from pathlib import Path
+
+        def parse(contents):
+            parser = McInstrParser(CommonTokenStream(McInstrLexer(InputStream(contents))))
+            # registries = [LocalRegistry(name='test_files', root=Path(__file__).parent.as_posix()), MCSTAS_REGISTRY]
+            registries = [MCSTAS_REGISTRY]
+            reader = Reader(registries=registries)
+            visitor = InstrVisitor(reader, '<test string>')
+            instr = visitor.visitProg(parser.prog())
+            instr.flags = tuple(reader.c_flags)
+            instr.registries = tuple(registries)
+            return instr
+
         from mccode_antlr.loader import parse_mcstas_instr
         d_spacing = 3.355  # (002) for Highly-ordered Pyrolytic Graphite
         mean_energy = 5.0
@@ -152,7 +169,7 @@ class SplitRunTestCase(unittest.TestCase):
         COMPONENT detector = Monitor(xwidth=0.01, yheight=0.05) AT (0, 0, 0.8) RELATIVE sample_arm
         END
         """
-        return parse_mcstas_instr(instr), min_a1, max_a1
+        return parse(instr), min_a1, max_a1
 
     def setUp(self) -> None:
         from pathlib import Path
@@ -192,6 +209,19 @@ class SplitRunTestCase(unittest.TestCase):
             print(x)
 
         # It would be nice to check that the produced mccode.sim and mccode.dat files look right.
+
+    def test_parallel_scan(self):
+        from restage.splitrun import splitrun
+        from restage.range import parse_scan_parameters
+        scan = parse_scan_parameters([f'a1={self.min_a1}:0.5:{self.max_a1}', f'a2={2 * self.min_a1}:{2 * self.max_a1}'])
+        output = self.dir.joinpath('test_parallel_scan')
+        if not output.exists():
+            output.mkdir(parents=True)
+        splitrun(self.instr, scan, precision={}, split_at='split_at', grid=False, ncount=100_000, dir=output, parallel=True)
+
+        # check the scan directory for output
+        for x in self.dir.glob('**/*.dat'):
+            print(x)
 
 
 if __name__ == '__main__':
