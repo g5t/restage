@@ -28,7 +28,7 @@ def bifrost_translate_energy_to_chopper_parameters(parameters: dict):
         name = ''.join(name)
         if name not in parameters:
             parameters[name] = 0
-    order = get_and_remove(parameters, 'order', 1)
+    order = get_and_remove(parameters, 'order', 14)
     time = get_and_remove(parameters, 'time', get_and_remove(parameters, 't', 170/180/(2 * 15 * 14)))
     return one_generic_energy_to_chopper_parameters(calculate, time, order, parameters)
 

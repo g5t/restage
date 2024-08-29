@@ -26,6 +26,7 @@ test = ["pytest", "chopcal"]
 [project.scripts]
 restage = "restage.run:entrypoint"
 splitrun = "restage.splitrun:entrypoint"
+restage_bifrost_choppers = "restage.bifrost_choppers:script"
 
 [tool.setuptools_scm]
 
