@@ -101,8 +101,10 @@ def parse_splitrun(parser):
     sys.argv[1:] = sort_args(sys.argv[1:])
 
     args = parser.parse_args()
-    args.mcpl_input_parameters = dict(args.mcpl_input_parameters)
-    args.mcpl_output_parameters = dict(args.mcpl_output_parameters)
+    if args.mcpl_input_parameters is not None:
+        args.mcpl_input_parameters = dict(args.mcpl_input_parameters)
+    if args.mcpl_output_parameters is not None:
+        args.mcpl_output_parameters = dict(args.mcpl_output_parameters)
     parameters = parse_scan_parameters(args.parameters)
     precision = parse_splitrun_precision(args.P)
     return args, parameters, precision
