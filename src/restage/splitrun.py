@@ -4,7 +4,7 @@ from pathlib import Path
 from .tables import SimulationEntry, InstrEntry
 
 def mcpl_parameter_split(s: str) -> tuple[str, str]:
-    k, v = s.split('=', 1)
+    k, v = s.split(':', 1)
     return k, v
 
 def make_splitrun_parser():
@@ -44,8 +44,8 @@ def make_splitrun_parser():
        help='Inserted MCPL file producing component, MCPL_output(.comp) if not provided')
     aa('--mcpl-input-component', nargs=1, type=str, default=None,
        help='Inserted MCPL file consuming component, MCPL_input(.comp) if not provided')
-    aa('--mcpl-input-parameters', nargs='+', type=mcpl_parameter_split)
-    aa('--mcpl-output-parameters', nargs='+', type=mcpl_parameter_split)
+    aa('--mcpl-input-parameters', nargs='+', type=mcpl_parameter_split, metavar='key:value')
+    aa('--mcpl-output-parameters', nargs='+', type=mcpl_parameter_split, metavar='key:value')
     aa('-P', action='append', default=[], help='Cache parameter matching precision')
 
     # Other McCode runtime arguments exist, but are likely not used during a scan:
@@ -94,13 +94,13 @@ def parse_splitrun_precision(unparsed: list[str]) -> dict[str, float]:
     return precision
 
 
-def parse_splitrun():
+def parse_splitrun(parser):
     from .range import parse_scan_parameters
     from mccode_antlr.run.runner import sort_args
     import sys
     sys.argv[1:] = sort_args(sys.argv[1:])
 
-    args = make_splitrun_parser().parse_args()
+    args = parser.parse_args()
     args.mcpl_input_parameters = dict(args.mcpl_input_parameters)
     args.mcpl_output_parameters = dict(args.mcpl_output_parameters)
     parameters = parse_scan_parameters(args.parameters)
@@ -109,13 +109,17 @@ def parse_splitrun():
 
 
 def entrypoint():
-    args, parameters, precision = parse_splitrun()
+    args, parameters, precision = parse_splitrun(make_splitrun_parser())
     splitrun_from_file(args, parameters, precision)
 
 
 def splitrun_from_file(args, parameters, precision):
     from .instr import load_instr
     instr = load_instr(args.instrument[0])
+    splitrun_args(instr, parameters, precision, args)
+
+
+def splitrun_args(instr, parameters, precision, args, **kwargs):
     splitrun(instr, parameters, precision, split_at=args.split_at[0], grid=args.mesh,
              seed=args.seed[0] if args.seed is not None else None,
              ncount=args.ncount[0] if args.ncount is not None else None,
@@ -130,10 +134,11 @@ def splitrun_from_file(args, parameters, precision):
              parallel=args.parallel,
              gpu=args.gpu,
              process_count=args.process_count,
-             mcpl_output_component=args.mcpl_output_component,
+             mcpl_output_component=args.mcpl_output_component[0] if args.mcpl_output_component is not None else None,
              mcpl_output_parameters=args.mcpl_output_parameters,
-             mcpl_input_component=args.mcpl_input_component,
+             mcpl_input_component=args.mcpl_input_component[0] if args.mcpl_input_component is not None else None,
              mcpl_input_parameters=args.mcpl_input_parameters,
+             **kwargs
              )
 
 

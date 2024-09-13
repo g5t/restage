@@ -80,6 +80,17 @@ class SingleTestCase(unittest.TestCase):
             self.assertEqual(values[3], 'blah')
             self.assertEqual(values[4], '/data')
 
+    def test_mcpl_split_parameters(self):
+        args = self.parser.parse_args(['test.instr', 'a=1.0', 'b=2', 'c=3:5', 'd=blah',  'e=/data',
+                                       '--mcpl-input-parameters', 'preload:1', 'v_smear:0.01'])
+        self.assertEqual(args.parameters, ['a=1.0', 'b=2', 'c=3:5', 'd=blah', 'e=/data'])
+        self.assertEqual(args.mcpl_input_parameters, [('preload', '1'), ('v_smear', '0.01')])
+        args = self.parser.parse_args(['new_tst.instr', '--mcpl-output-parameters', 'preload:1',
+                                       '--mcpl-input-component=MCPL_input_once'])
+        self.assertEqual(args.parameters, [])
+        self.assertEqual(args.mcpl_output_parameters, [('preload', '1')])
+        self.assertEqual(args.mcpl_input_component, ['MCPL_input_once'])
+
 
 class DictWranglingTestCase(unittest.TestCase):
     def test_regularization(self):
