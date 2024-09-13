@@ -14,7 +14,7 @@ class SingleTestCase(unittest.TestCase):
         self.assertTrue(args.mesh)
 
     def test_mixed_parsing(self):
-        from restage.splitrun import sort_args
+        from mccode_antlr.run.runner import sort_args
         args = self.parser.parse_args(sort_args(['test.instr', '-m', 'a=1', 'b=2', '--split-at=here']))
         self.assertEqual(args.instrument, ['test.instr'])
         self.assertEqual(args.parameters, ['a=1', 'b=2'])
@@ -117,12 +117,19 @@ class SplitRunTestCase(unittest.TestCase):
         from mccode_antlr.grammar import McInstrParser, McInstrLexer
         from mccode_antlr.instr import InstrVisitor
         from mccode_antlr.reader import Reader, MCSTAS_REGISTRY, LocalRegistry
+        from mccode_antlr.reader import GitHubRegistry
         from pathlib import Path
 
         def parse(contents):
             parser = McInstrParser(CommonTokenStream(McInstrLexer(InputStream(contents))))
             # registries = [LocalRegistry(name='test_files', root=Path(__file__).parent.as_posix()), MCSTAS_REGISTRY]
-            registries = [MCSTAS_REGISTRY]
+            mcpl_input_once_registry = GitHubRegistry(
+                name='mcpl_input_once',
+                url='https://github.com/g5t/mccode-mcpl-input-once',
+                version='main',
+                filename='pooch-registry.txt'
+            )
+            registries = [MCSTAS_REGISTRY, mcpl_input_once_registry]
             reader = Reader(registries=registries)
             visitor = InstrVisitor(reader, '<test string>')
             instr = visitor.visitProg(parser.prog())
@@ -202,7 +209,8 @@ class SplitRunTestCase(unittest.TestCase):
             output.mkdir(parents=True)
 
         # run the scan
-        splitrun(self.instr, scan, precision={}, split_at='split_at', grid=False, ncount=10_000, dir=output)
+        splitrun(self.instr, scan, precision={}, split_at='split_at', grid=False, ncount=10_000, dir=output,
+                 mcpl_input_component='MCPL_input_once')
 
         # check the scan directory for output
         for x in self.dir.glob('**/*.dat'):
@@ -217,7 +225,8 @@ class SplitRunTestCase(unittest.TestCase):
         output = self.dir.joinpath('test_parallel_scan')
         if not output.exists():
             output.mkdir(parents=True)
-        splitrun(self.instr, scan, precision={}, split_at='split_at', grid=False, ncount=100_000, dir=output, parallel=True)
+        splitrun(self.instr, scan, precision={}, split_at='split_at', grid=False, ncount=100_000, dir=output,
+                 parallel=True, mcpl_input_component='MCPL_input_once')
 
         # check the scan directory for output
         for x in self.dir.glob('**/*.dat'):

@@ -10,8 +10,8 @@ def uuid():
 
 
 def utc_timestamp() -> float:
-    from datetime import datetime
-    return datetime.utcnow().timestamp()
+    from datetime import datetime, UTC
+    return datetime.now(UTC).timestamp()
 
 
 COMMON_COLUMNS = ['seed', 'ncount', 'output_path', 'gravitation', 'creation', 'last_access']

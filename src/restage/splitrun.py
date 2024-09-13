@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-from typing import Union
 from pathlib import Path
-from .range import Singular, MRange
 from .tables import SimulationEntry, InstrEntry
-from mccode_antlr.compiler.c import CBinaryTarget
-
 
 def make_splitrun_parser():
     from argparse import ArgumentParser
@@ -40,6 +36,10 @@ def make_splitrun_parser():
     # splitrun controlling parameters
     aa('--split-at', nargs=1, type=str, default=['mcpl_split'],
        help='Component at which to split -- DEFAULT: mcpl_split')
+    aa('--mcpl-output-component', nargs=1, type=str, default=None,
+       help='Inserted MCPL file producing component, MCPL_output(.comp) if not provided')
+    aa('--mcpl-input-component', nargs=1, type=str, default=None,
+       help='Inserted MCPL file consuming component, MCPL_input(.comp) if not provided')
     aa('-P', action='append', default=[], help='Cache parameter matching precision')
 
     # Other McCode runtime arguments exist, but are likely not used during a scan:
@@ -78,31 +78,6 @@ def regular_mccode_runtime_dict(args: dict) -> dict:
     return t
 
 
-def mccode_runtime_dict_to_args_list(args: dict) -> list[str]:
-    """Convert a dictionary of McCode runtime arguments to a string.
-
-    :parameter args: A dictionary of McCode runtime arguments.
-    :return: A list of arguments suitable for use in a command line call to a McCode compiled instrument.
-    """
-    # convert to a standardized string:
-    out = []
-    if 'seed' in args and args['seed'] is not None:
-        out.append(f'--seed={args["seed"]}')
-    if 'ncount' in args and args['ncount'] is not None:
-        out.append(f'--ncount={args["ncount"]}')
-    if 'dir' in args and args['dir'] is not None:
-        out.append(f'--dir={args["dir"]}')
-    if 'trace' in args and args['trace']:
-        out.append('--trace')
-    if 'gravitation' in args and args['gravitation']:
-        out.append('--gravitation')
-    if 'bufsiz' in args and args['bufsiz'] is not None:
-        out.append(f'--bufsiz={args["bufsiz"]}')
-    if 'format' in args and args['format'] is not None:
-        out.append(f'--format={args["format"]}')
-    return out
-
-
 def parse_splitrun_precision(unparsed: list[str]) -> dict[str, float]:
     precision = {}
     for p in unparsed:
@@ -113,26 +88,9 @@ def parse_splitrun_precision(unparsed: list[str]) -> dict[str, float]:
     return precision
 
 
-def sort_args(args: list[str]) -> list[str]:
-    """Take the list of arguments and sort them into the correct order for splitrun"""
-    # TODO this is a bit of a hack, but it works for now
-    first, last = [], []
-    k = 0
-    while k < len(args):
-        if args[k].startswith('-'):
-            first.append(args[k])
-            k += 1
-            if '=' not in first[-1] and k < len(args) and not args[k].startswith('-') and '=' not in args[k]:
-                first.append(args[k])
-                k += 1
-        else:
-            last.append(args[k])
-            k += 1
-    return first + last
-
-
 def parse_splitrun():
     from .range import parse_scan_parameters
+    from mccode_antlr.run.runner import sort_args
     import sys
     sys.argv[1:] = sort_args(sys.argv[1:])
 
@@ -164,6 +122,8 @@ def splitrun_from_file(args, parameters, precision):
              parallel=args.parallel,
              gpu=args.gpu,
              process_count=args.process_count,
+             mcpl_output_component=args.mcpl_output_component,
+             mcpl_input_component=args.mcpl_input_component,
              )
 
 
@@ -174,6 +134,8 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
              parallel=False, gpu=False, process_count=0,
              callback=None, callback_arguments: dict[str, str] | None = None,
              output_split_instrs=True,
+             mcpl_output_component=None,
+             mcpl_input_component=None,
              **runtime_arguments):
     from zenlog import log
     from .energy import get_energy_parameter_names
@@ -183,7 +145,11 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
     if not instr.has_component_named(split_at):
         log.error(f'The specified split-at component, {split_at}, does not exist in the instrument file')
     # splitting defines an instrument parameter in both returned instrument, 'mcpl_filename'.
-    pre, post = instr.mcpl_split(split_at, remove_unused_parameters=True)
+    pre, post = instr.mcpl_split(split_at,
+                                 output_component=mcpl_output_component,
+                                 input_component=mcpl_input_component,
+                                 remove_unused_parameters=True
+                                 )
     if output_split_instrs:
         for p in (pre, post):
             with open(f'{p.name}.instr', 'w') as f:
@@ -332,7 +298,8 @@ def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, gri
 
 
 def _args_pars_mcpl(args: dict, params: dict, mcpl_filename) -> str:
-    # Combine the arguments, parameters, and mcpl filename into a single command-arguments string:
+    """Combine the arguments, parameters, and mcpl filename into a single command-arguments string:"""
+    from mccode_antlr.run.runner import mccode_runtime_dict_to_args_list
     first = ' '.join(mccode_runtime_dict_to_args_list(args))
     second = ' '.join([f'{k}={v}' for k, v in params.items()])
     third = f'mcpl_filename={mcpl_filename}'
