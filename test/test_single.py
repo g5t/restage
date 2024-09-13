@@ -226,7 +226,8 @@ class SplitRunTestCase(unittest.TestCase):
         if not output.exists():
             output.mkdir(parents=True)
         splitrun(self.instr, scan, precision={}, split_at='split_at', grid=False, ncount=100_000, dir=output,
-                 parallel=True, mcpl_input_component='MCPL_input_once')
+                 parallel=True, process_count=4,
+                 mcpl_input_component='MCPL_input_once', mcpl_input_parameters={'preload': '1'})
 
         # check the scan directory for output
         for x in self.dir.glob('**/*.dat'):
