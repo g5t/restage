@@ -1,31 +1,18 @@
 """
 Utilities for interfacing with mccode_antlr.instr.Instr objects
 """
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Union
 from mccode_antlr.instr import Instr
 from mccode_antlr.reader import Registry
 
 
-def special_load_mcstas_instr(filepath: Path, extra_registries: list[Registry] | None = None):
-    from antlr4 import CommonTokenStream, InputStream
-    from mccode_antlr.grammar import McInstrParser, McInstrLexer
-    from mccode_antlr.instr import InstrVisitor
-    from mccode_antlr.reader import Reader, MCSTAS_REGISTRY
-    contents = filepath.read_text()
-    parser = McInstrParser(CommonTokenStream(McInstrLexer(InputStream(contents))))
-    registries = [MCSTAS_REGISTRY] if extra_registries is None else [MCSTAS_REGISTRY] + extra_registries
-    reader = Reader(registries=registries)
-    visitor = InstrVisitor(reader, str(filepath))
-    instr = visitor.visitProg(parser.prog())
-    instr.flags = tuple(reader.c_flags)
-    instr.registries = tuple(registries)
-    return instr
-
-
 def load_instr(filepath: Union[str, Path], extra_registries: list[Registry] | None = None) -> Instr:
     """Loads an Instr object from a .instr file or a HDF5 file"""
     from mccode_antlr.io import load_hdf5
+    from mccode_antlr.loader import load_mcstas_instr
 
     if not isinstance(filepath, Path):
         filepath = Path(filepath)
@@ -44,7 +31,7 @@ def load_instr(filepath: Union[str, Path], extra_registries: list[Registry] | No
         extra_registries = [mcpl_input_once_registry]
 
     if filepath.suffix == '.instr':
-        return special_load_mcstas_instr(filepath, extra_registries=extra_registries)
+        return load_mcstas_instr(filepath, registries=extra_registries)
 
     instr = load_hdf5(filepath)
     instr.registries += tuple(extra_registries)
