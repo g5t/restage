@@ -218,6 +218,13 @@ class SplitRunTestCase(unittest.TestCase):
             shutil.rmtree(self.dir)
 
     def test_simple_scan(self):
+        """This test requires MCPL shared libraries to work
+
+        For some unexplored reason, MCPL shared libraries are not found in their
+        default installed location, /usr/local/lib64/libmcpl.so; so this test must
+        be invoked with that location specified, e.g.,
+            $ LD_LIBRARY_PATH=/usr/local/lib64 pytest test/test_single.py -k test_simple_scan
+        """
         # Scanning a1 and a2 with a2=2*a1 should produce approximately the same intensity for all points
         # as long as a1 is between the limits of min_a1 and max_a1
         from restage.splitrun import splitrun

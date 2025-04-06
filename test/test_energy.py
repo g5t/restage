@@ -1,20 +1,31 @@
 import unittest
 
+
+def parameters(names: tuple[str, ...]):
+    from itertools import product
+    return tuple(x + y for x, y in product(names, ('speed', 'phase')))
+
+
+CHOPPER_NAMES = ('pulse_shaping', 'frame_overlap', 'bandwidth')
+CHOPPERS = tuple(f'{name}_chopper_{no}' for name in CHOPPER_NAMES for no in (1, 2))
+OLD_CHOPPERS = tuple(f'{name}{no}' for name in ('ps', 'fo', 'bw') for no in (1, 2))
+
+
 class BIFROSTEnergyTestCase(unittest.TestCase):
     def setUp(self):
         from mccode_antlr.loader import parse_mcstas_instr
         instr = f"""DEFINE INSTRUMENT this_IS_NOT_BIFROST(
-        ps1speed, ps1phase, ps2speed, ps2phase, fo1speed, fo1phase, bw1speed, bw1phase, bw2speed, bw2phase
+        pulse_shaping_chopper_1speed, pulse_shaping_chopper_1phase, pulse_shaping_chopper_2speed, pulse_shaping_chopper_2phase, frame_overlap_chopper_1speed, frame_overlap_chopper_1phase, bandwidth_chopper_1speed, bandwidth_chopper_1phase, bandwidth_chopper_2speed, bandwidth_chopper_2phase
         )
         TRACE
         COMPONENT origin = Arm() AT (0, 0, 0) ABSOLUTE
-        COMPONENT ps1 = DiskChopper(theta_0=170, radius=0.35, nu=ps1speed, phase=ps1phase) AT (0, 0, 1) RELATIVE PREVIOUS
-        COMPONENT ps2 = DiskChopper(theta_0=170, radius=0.35, nu=ps2speed, phase=ps2phase) AT (0, 0, 0.02) RELATIVE ps1
-        COMPONENT fo1 = DiskChopper(theta_0=110, radius=0.35, nu=fo1speed, phase=fo1phase) AT (0, 0, 12) RELATIVE ps2
-        COMPONENT fo2 = DiskChopper(theta_0=115, radius=0.35, nu=fo1speed, phase=fo1phase) AT (0, 0, 4) RELATIVE fo1
-        COMPONENT bw1 = DiskChopper(theta_0=110, radius=0.35, nu=bw1speed, phase=bw1phase) AT (0, 0, 80) RELATIVE fo2
-        COMPONENT bw2 = DiskChopper(theta_0=115, radius=0.35, nu=bw2speed, phase=bw2phase) AT (0, 0, 0.02) RELATIVE bw1
-        COMPONENT sample = Arm() AT (0, 0, 80) RELATIVE bw2
+        COMPONENT pulse_shaping_chopper_1 = DiskChopper(theta_0=170, radius=0.35, nu=pulse_shaping_chopper_1speed, phase=pulse_shaping_chopper_1phase) AT (0, 0, 1) RELATIVE PREVIOUS
+        COMPONENT pulse_shaping_chopper_2 = DiskChopper(theta_0=170, radius=0.35, nu=pulse_shaping_chopper_2speed, phase=pulse_shaping_chopper_2phase) AT (0, 0, 0.02) RELATIVE pulse_shaping_chopper_1
+        COMPONENT frame_overlap_chopper_1 = DiskChopper(theta_0=110, radius=0.35, nu=frame_overlap_chopper_1speed, phase=frame_overlap_chopper_1phase) AT (0, 0, 12) RELATIVE pulse_shaping_chopper_2
+        COMPONENT frame_overlap_chopper_2 = DiskChopper(theta_0=115, radius=0.35, nu=frame_overlap_chopper_1speed, phase=frame_overlap_chopper_1phase) AT (0, 0, 4) RELATIVE frame_overlap_chopper_1
+        COMPONENT bandwidth_chopper_1 = DiskChopper(theta_0=110, radius=0.35, nu=bandwidth_chopper_1speed, phase=bandwidth_chopper_1phase) AT (0, 0, 80) RELATIVE frame_overlap_chopper_2
+        COMPONENT bandwidth_chopper_2 = DiskChopper(theta_0=115, radius=0.35, nu=bandwidth_chopper_2speed, phase=bandwidth_chopper_2phase) AT (0, 0, 0.02) RELATIVE bandwidth_chopper_1
+        COMPONENT sample = Arm() AT (0, 0, 80) RELATIVE bandwidth_chopper_2
         END
         """
         self.instr = parse_mcstas_instr(instr)
@@ -46,8 +57,8 @@ class BIFROSTEnergyTestCase(unittest.TestCase):
             e = y * 0.5 + 1.7
             self.assertAlmostEqual(x, e)
 
-        parameters = dict(order=order, time=time, ei=ei)
-        npts, names, points = parameters_to_scan(parameters, grid=True)
+        scan_parameters = dict(order=order, time=time, ei=ei)
+        npts, names, points = parameters_to_scan(scan_parameters, grid=True)
         self.assertEqual(npts, 47*11)
         self.assertEqual(names, ['order', 'time', 'ei'])
         all_points = list(points)
@@ -68,7 +79,7 @@ class BIFROSTEnergyTestCase(unittest.TestCase):
         from restage.energy import energy_to_chopper_translator
         from restage.energy import bifrost_translate_energy_to_chopper_parameters
         from restage.range import MRange, Singular, parameters_to_scan
-        from itertools import product
+
 
         translator = energy_to_chopper_translator(self.instr.name)
         self.assertEqual(translator, bifrost_translate_energy_to_chopper_parameters)
@@ -76,35 +87,32 @@ class BIFROSTEnergyTestCase(unittest.TestCase):
         order = Singular(14,  1)
         time = MRange(0.0001, 0.002248, 0.0002)
         ei = MRange(1.7, 24.7, 0.5)
-        parameters = dict(order=order, time=time, ei=ei)
+        scan_parameters = dict(order=order, time=time, ei=ei)
 
-        spts, names, points = parameters_to_scan(parameters, grid=True)
+        spts, names, points = parameters_to_scan(scan_parameters, grid=True)
 
         self.assertEqual(47*11, spts)
         self.assertEqual(names, ['order', 'time', 'ei'])
 
-        chopper_pars = [x + y for x, y in product(('ps1', 'ps2', 'fo1', 'fo2', 'bw1', 'bw2'), ('speed', 'phase'))]
-
+        chopper_parameters = parameters(CHOPPERS)
         for point in points:
             kv = {k: v for k, v in zip(names, point)}
             translated = translator(kv)
-            for x in chopper_pars:
-                self.assertTrue(''.join(x) in translated)
+            for x in chopper_parameters:
+                self.assertTrue(x in translated)
 
-            self.assertEqual(len(translated), len(chopper_pars))
-            self.assertAlmostEqual(translated['bw1speed'], 14.0)
-            self.assertAlmostEqual(translated['bw2speed'], -14.0)
-            self.assertAlmostEqual(translated['fo1speed'], 14.0)
-            self.assertAlmostEqual(translated['fo1speed'], 14.0)
-            self.assertAlmostEqual(translated['ps1speed'], 14*14.0)
-            self.assertAlmostEqual(translated['ps2speed'], 14*14.0)
+            self.assertEqual(len(translated), len(chopper_parameters))
+            self.assertAlmostEqual(translated['bandwidth_chopper_1speed'], 14.0)
+            self.assertAlmostEqual(translated['bandwidth_chopper_2speed'], -14.0)
+            self.assertAlmostEqual(translated['frame_overlap_chopper_1speed'], 14.0)
+            self.assertAlmostEqual(translated['frame_overlap_chopper_1speed'], 14.0)
+            self.assertAlmostEqual(translated['pulse_shaping_chopper_1speed'], 14*14.0)
+            self.assertAlmostEqual(translated['pulse_shaping_chopper_2speed'], 14*14.0)
 
     def test_calculations(self):
         from itertools import product
         from chopcal import bifrost as mcstas_bifrost_calculation
         from restage.energy import bifrost_translate_energy_to_chopper_parameters
-
-        pars = [x+y for x, y in product(('ps1', 'ps2', 'fo1', 'fo2', 'bw1', 'bw2'), ('speed', 'phase'))]
 
         shortest_time = 0.0001  # this is approximately twice the opening time of the pulse shaping choppers at 15*14 Hz
         # Normal operation  Shortest full-height pulse  Shorter pulses reduce height
@@ -129,8 +137,8 @@ class BIFROSTEnergyTestCase(unittest.TestCase):
             kv = {'order': order, 'time': time, 'ei': energy}
             translated = bifrost_translate_energy_to_chopper_parameters(kv)
             from_mcstas = mcstas_bifrost_calculation(energy, 0., time)
-            for x in pars:
-                self.assertAlmostEqual(from_mcstas[x], translated[x])
+            for o, x in zip(parameters(OLD_CHOPPERS), parameters(CHOPPERS)):
+                self.assertAlmostEqual(from_mcstas[o], translated[x])
 
 
 if __name__ == '__main__':
