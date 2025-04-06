@@ -16,7 +16,7 @@ def load_instr(filepath: Union[str, Path]) -> Instr:
     if not isinstance(filepath, Path):
         filepath = Path(filepath)
     if not filepath.exists() or not filepath.is_file():
-        raise ValueError('The provided filepath does not exist or is not a file')
+        raise ValueError(f'The provided {filepath=} does not exist or is not a file')
 
     if filepath.suffix == '.instr':
         return load_mcstas_instr(filepath)

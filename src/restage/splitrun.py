@@ -135,7 +135,7 @@ def splitrun_args(instr, parameters, precision, args, **kwargs):
              dry_run=args.dryrun,
              parallel=args.parallel,
              gpu=args.gpu,
-             process_count=args.process_count,
+             process_count=args.process_count[0] if args.process_count is not None else None,
              mcpl_output_component=args.mcpl_output_component[0] if args.mcpl_output_component is not None else None,
              mcpl_output_parameters=args.mcpl_output_parameters,
              mcpl_input_component=args.mcpl_input_component[0] if args.mcpl_input_component is not None else None,
