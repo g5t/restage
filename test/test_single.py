@@ -1,4 +1,26 @@
 import unittest
+from mccode_antlr.compiler.check import simple_instr_compiles
+
+
+def compiled_test(method, compiler: str | None = None):
+    if compiler is None:
+        compiler = 'cc'
+    if simple_instr_compiles(compiler):
+        return method
+
+    @unittest.skip(f"Skipping due to lack of working {compiler}")
+    def skipped_method(*args, **kwargs):
+        return method(*args, **kwargs)
+
+    return skipped_method
+
+
+def gpu_compiled_test(method):
+    return compiled_test(method, 'acc')
+
+
+def mpi_compiled_test(method):
+    return compiled_test(method, 'mpi/cc')
 
 
 class SingleTestCase(unittest.TestCase):
@@ -124,15 +146,11 @@ class SplitRunTestCase(unittest.TestCase):
 
     def _define_instr(self):
         from math import pi, asin, sqrt
-        from antlr4 import CommonTokenStream, InputStream
-        from mccode_antlr.grammar import McInstrParser, McInstrLexer
-        from mccode_antlr.instr import InstrVisitor
-        from mccode_antlr.reader import Reader, MCSTAS_REGISTRY, LocalRegistry
+        from mccode_antlr.reader import MCSTAS_REGISTRY
         from mccode_antlr.reader import GitHubRegistry
-        from pathlib import Path
+        from mccode_antlr.loader.loader import parse_mccode_instr
 
         def parse(contents):
-            parser = McInstrParser(CommonTokenStream(McInstrLexer(InputStream(contents))))
             # registries = [LocalRegistry(name='test_files', root=Path(__file__).parent.as_posix()), MCSTAS_REGISTRY]
             mcpl_input_once_registry = GitHubRegistry(
                 name='mcpl_input_once',
@@ -141,14 +159,8 @@ class SplitRunTestCase(unittest.TestCase):
                 filename='pooch-registry.txt'
             )
             registries = [MCSTAS_REGISTRY, mcpl_input_once_registry]
-            reader = Reader(registries=registries)
-            visitor = InstrVisitor(reader, '<test string>')
-            instr = visitor.visitProg(parser.prog())
-            instr.flags = tuple(reader.c_flags)
-            instr.registries = tuple(registries)
-            return instr
+            return parse_mccode_instr(contents, registries, '<test string>')
 
-        from mccode_antlr.loader import parse_mcstas_instr
         d_spacing = 3.355  # (002) for Highly-ordered Pyrolytic Graphite
         mean_energy = 5.0
         energy_width = 1.0
@@ -229,7 +241,18 @@ class SplitRunTestCase(unittest.TestCase):
 
         # It would be nice to check that the produced mccode.sim and mccode.dat files look right.
 
+    @mpi_compiled_test
     def test_parallel_scan(self):
+        """This test requires mpicc and MCPL shared libraries to work
+
+        On some systems (Fedora at least) specifying which MPI to use requires using
+        the `module` system, e.g.,
+            $ module load mpi/openmpi-x86_64
+        And for some unexplored reason, MCPL shared libraries are not found in their
+        default installed location, /usr/local/lib64/libmcpl.so; so this test must
+        be invoked with that location specified, e.g.,
+            $ LD_LIBRARY_PATH=/usr/local/lib64 pytest test/test_single.py -k test_parallel_scan
+        """
         from restage.splitrun import splitrun
         from restage.range import parse_scan_parameters
         scan = parse_scan_parameters([f'a1={self.min_a1}:0.5:{self.max_a1}', f'a2={2 * self.min_a1}:{2 * self.max_a1}'])
