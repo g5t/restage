@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import unittest
 from mccode_antlr.compiler.check import simple_instr_compiles
 
