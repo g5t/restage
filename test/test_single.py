@@ -1,4 +1,28 @@
+from __future__ import annotations
+
 import unittest
+from mccode_antlr.compiler.check import simple_instr_compiles
+
+
+def compiled_test(method, compiler: str | None = None):
+    if compiler is None:
+        compiler = 'cc'
+    if simple_instr_compiles(compiler):
+        return method
+
+    @unittest.skip(f"Skipping due to lack of working {compiler}")
+    def skipped_method(*args, **kwargs):
+        return method(*args, **kwargs)
+
+    return skipped_method
+
+
+def gpu_compiled_test(method):
+    return compiled_test(method, 'acc')
+
+
+def mpi_compiled_test(method):
+    return compiled_test(method, 'mpi/cc')
 
 
 class SingleTestCase(unittest.TestCase):
@@ -14,7 +38,7 @@ class SingleTestCase(unittest.TestCase):
         self.assertTrue(args.mesh)
 
     def test_mixed_parsing(self):
-        from restage.splitrun import sort_args
+        from mccode_antlr.run.runner import sort_args
         args = self.parser.parse_args(sort_args(['test.instr', '-m', 'a=1', 'b=2', '--split-at=here']))
         self.assertEqual(args.instrument, ['test.instr'])
         self.assertEqual(args.parameters, ['a=1', 'b=2'])
@@ -80,6 +104,17 @@ class SingleTestCase(unittest.TestCase):
             self.assertEqual(values[3], 'blah')
             self.assertEqual(values[4], '/data')
 
+    def test_mcpl_split_parameters(self):
+        args = self.parser.parse_args(['test.instr', 'a=1.0', 'b=2', 'c=3:5', 'd=blah',  'e=/data',
+                                       '--mcpl-input-parameters', 'preload:1', 'v_smear:0.01'])
+        self.assertEqual(args.parameters, ['a=1.0', 'b=2', 'c=3:5', 'd=blah', 'e=/data'])
+        self.assertEqual(args.mcpl_input_parameters, [('preload', '1'), ('v_smear', '0.01')])
+        args = self.parser.parse_args(['new_tst.instr', '--mcpl-output-parameters', 'preload:1',
+                                       '--mcpl-input-component=MCPL_input_once'])
+        self.assertEqual(args.parameters, [])
+        self.assertEqual(args.mcpl_output_parameters, [('preload', '1')])
+        self.assertEqual(args.mcpl_input_component, ['MCPL_input_once'])
+
 
 class DictWranglingTestCase(unittest.TestCase):
     def test_regularization(self):
@@ -113,24 +148,21 @@ class SplitRunTestCase(unittest.TestCase):
 
     def _define_instr(self):
         from math import pi, asin, sqrt
-        from antlr4 import CommonTokenStream, InputStream
-        from mccode_antlr.grammar import McInstrParser, McInstrLexer
-        from mccode_antlr.instr import InstrVisitor
-        from mccode_antlr.reader import Reader, MCSTAS_REGISTRY, LocalRegistry
-        from pathlib import Path
+        from mccode_antlr.reader import MCSTAS_REGISTRY
+        from mccode_antlr.reader import GitHubRegistry
+        from mccode_antlr.loader.loader import parse_mccode_instr
 
         def parse(contents):
-            parser = McInstrParser(CommonTokenStream(McInstrLexer(InputStream(contents))))
             # registries = [LocalRegistry(name='test_files', root=Path(__file__).parent.as_posix()), MCSTAS_REGISTRY]
-            registries = [MCSTAS_REGISTRY]
-            reader = Reader(registries=registries)
-            visitor = InstrVisitor(reader, '<test string>')
-            instr = visitor.visitProg(parser.prog())
-            instr.flags = tuple(reader.c_flags)
-            instr.registries = tuple(registries)
-            return instr
+            mcpl_input_once_registry = GitHubRegistry(
+                name='mcpl_input_once',
+                url='https://github.com/g5t/mccode-mcpl-input-once',
+                version='main',
+                filename='pooch-registry.txt'
+            )
+            registries = [MCSTAS_REGISTRY, mcpl_input_once_registry]
+            return parse_mccode_instr(contents, registries, '<test string>')
 
-        from mccode_antlr.loader import parse_mcstas_instr
         d_spacing = 3.355  # (002) for Highly-ordered Pyrolytic Graphite
         mean_energy = 5.0
         energy_width = 1.0
@@ -202,7 +234,8 @@ class SplitRunTestCase(unittest.TestCase):
             output.mkdir(parents=True)
 
         # run the scan
-        splitrun(self.instr, scan, precision={}, split_at='split_at', grid=False, ncount=10_000, dir=output)
+        splitrun(self.instr, scan, precision={}, split_at='split_at', grid=False, ncount=10_000, dir=output,
+                 mcpl_input_component='MCPL_input_once')
 
         # check the scan directory for output
         for x in self.dir.glob('**/*.dat'):
@@ -210,14 +243,27 @@ class SplitRunTestCase(unittest.TestCase):
 
         # It would be nice to check that the produced mccode.sim and mccode.dat files look right.
 
+    @mpi_compiled_test
     def test_parallel_scan(self):
+        """This test requires mpicc and MCPL shared libraries to work
+
+        On some systems (Fedora at least) specifying which MPI to use requires using
+        the `module` system, e.g.,
+            $ module load mpi/openmpi-x86_64
+        And for some unexplored reason, MCPL shared libraries are not found in their
+        default installed location, /usr/local/lib64/libmcpl.so; so this test must
+        be invoked with that location specified, e.g.,
+            $ LD_LIBRARY_PATH=/usr/local/lib64 pytest test/test_single.py -k test_parallel_scan
+        """
         from restage.splitrun import splitrun
         from restage.range import parse_scan_parameters
         scan = parse_scan_parameters([f'a1={self.min_a1}:0.5:{self.max_a1}', f'a2={2 * self.min_a1}:{2 * self.max_a1}'])
         output = self.dir.joinpath('test_parallel_scan')
         if not output.exists():
             output.mkdir(parents=True)
-        splitrun(self.instr, scan, precision={}, split_at='split_at', grid=False, ncount=100_000, dir=output, parallel=True)
+        splitrun(self.instr, scan, precision={}, split_at='split_at', grid=False, ncount=100_000, dir=output,
+                 parallel=True, process_count=4,
+                 mcpl_input_component='MCPL_input_once', mcpl_input_parameters={'preload': '1'})
 
         # check the scan directory for output
         for x in self.dir.glob('**/*.dat'):

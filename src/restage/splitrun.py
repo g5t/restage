@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Union
 from pathlib import Path
-from .range import Singular, MRange
 from .tables import SimulationEntry, InstrEntry
-from mccode_antlr.compiler.c import CBinaryTarget
 
+def mcpl_parameter_split(s: str) -> tuple[str, str]:
+    k, v = s.split(':', 1)
+    return k, v
 
 def make_splitrun_parser():
     from argparse import ArgumentParser
@@ -40,6 +40,12 @@ def make_splitrun_parser():
     # splitrun controlling parameters
     aa('--split-at', nargs=1, type=str, default=['mcpl_split'],
        help='Component at which to split -- DEFAULT: mcpl_split')
+    aa('--mcpl-output-component', nargs=1, type=str, default=None,
+       help='Inserted MCPL file producing component, MCPL_output(.comp) if not provided')
+    aa('--mcpl-input-component', nargs=1, type=str, default=None,
+       help='Inserted MCPL file consuming component, MCPL_input(.comp) if not provided')
+    aa('--mcpl-input-parameters', nargs='+', type=mcpl_parameter_split, metavar='key:value')
+    aa('--mcpl-output-parameters', nargs='+', type=mcpl_parameter_split, metavar='key:value')
     aa('-P', action='append', default=[], help='Cache parameter matching precision')
 
     # Other McCode runtime arguments exist, but are likely not used during a scan:
@@ -78,31 +84,6 @@ def regular_mccode_runtime_dict(args: dict) -> dict:
     return t
 
 
-def mccode_runtime_dict_to_args_list(args: dict) -> list[str]:
-    """Convert a dictionary of McCode runtime arguments to a string.
-
-    :parameter args: A dictionary of McCode runtime arguments.
-    :return: A list of arguments suitable for use in a command line call to a McCode compiled instrument.
-    """
-    # convert to a standardized string:
-    out = []
-    if 'seed' in args and args['seed'] is not None:
-        out.append(f'--seed={args["seed"]}')
-    if 'ncount' in args and args['ncount'] is not None:
-        out.append(f'--ncount={args["ncount"]}')
-    if 'dir' in args and args['dir'] is not None:
-        out.append(f'--dir={args["dir"]}')
-    if 'trace' in args and args['trace']:
-        out.append('--trace')
-    if 'gravitation' in args and args['gravitation']:
-        out.append('--gravitation')
-    if 'bufsiz' in args and args['bufsiz'] is not None:
-        out.append(f'--bufsiz={args["bufsiz"]}')
-    if 'format' in args and args['format'] is not None:
-        out.append(f'--format={args["format"]}')
-    return out
-
-
 def parse_splitrun_precision(unparsed: list[str]) -> dict[str, float]:
     precision = {}
     for p in unparsed:
@@ -113,43 +94,34 @@ def parse_splitrun_precision(unparsed: list[str]) -> dict[str, float]:
     return precision
 
 
-def sort_args(args: list[str]) -> list[str]:
-    """Take the list of arguments and sort them into the correct order for splitrun"""
-    # TODO this is a bit of a hack, but it works for now
-    first, last = [], []
-    k = 0
-    while k < len(args):
-        if args[k].startswith('-'):
-            first.append(args[k])
-            k += 1
-            if '=' not in first[-1] and k < len(args) and not args[k].startswith('-') and '=' not in args[k]:
-                first.append(args[k])
-                k += 1
-        else:
-            last.append(args[k])
-            k += 1
-    return first + last
-
-
-def parse_splitrun():
+def parse_splitrun(parser):
     from .range import parse_scan_parameters
+    from mccode_antlr.run.runner import sort_args
     import sys
     sys.argv[1:] = sort_args(sys.argv[1:])
 
-    args = make_splitrun_parser().parse_args()
+    args = parser.parse_args()
+    if args.mcpl_input_parameters is not None:
+        args.mcpl_input_parameters = dict(args.mcpl_input_parameters)
+    if args.mcpl_output_parameters is not None:
+        args.mcpl_output_parameters = dict(args.mcpl_output_parameters)
     parameters = parse_scan_parameters(args.parameters)
     precision = parse_splitrun_precision(args.P)
     return args, parameters, precision
 
 
 def entrypoint():
-    args, parameters, precision = parse_splitrun()
+    args, parameters, precision = parse_splitrun(make_splitrun_parser())
     splitrun_from_file(args, parameters, precision)
 
 
 def splitrun_from_file(args, parameters, precision):
     from .instr import load_instr
     instr = load_instr(args.instrument[0])
+    splitrun_args(instr, parameters, precision, args)
+
+
+def splitrun_args(instr, parameters, precision, args, **kwargs):
     splitrun(instr, parameters, precision, split_at=args.split_at[0], grid=args.mesh,
              seed=args.seed[0] if args.seed is not None else None,
              ncount=args.ncount[0] if args.ncount is not None else None,
@@ -164,6 +136,11 @@ def splitrun_from_file(args, parameters, precision):
              parallel=args.parallel,
              gpu=args.gpu,
              process_count=args.process_count,
+             mcpl_output_component=args.mcpl_output_component[0] if args.mcpl_output_component is not None else None,
+             mcpl_output_parameters=args.mcpl_output_parameters,
+             mcpl_input_component=args.mcpl_input_component[0] if args.mcpl_input_component is not None else None,
+             mcpl_input_parameters=args.mcpl_input_parameters,
+             **kwargs
              )
 
 
@@ -174,8 +151,11 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
              parallel=False, gpu=False, process_count=0,
              callback=None, callback_arguments: dict[str, str] | None = None,
              output_split_instrs=True,
+             mcpl_output_component=None, mcpl_output_parameters: dict[str, str] | None = None,
+             mcpl_input_component=None, mcpl_input_parameters: dict[str, str] | None = None,
              **runtime_arguments):
     from zenlog import log
+    from mccode_antlr.common import ComponentParameter, Expr
     from .energy import get_energy_parameter_names
     if split_at is None:
         split_at = 'mcpl_split'
@@ -183,7 +163,17 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
     if not instr.has_component_named(split_at):
         log.error(f'The specified split-at component, {split_at}, does not exist in the instrument file')
     # splitting defines an instrument parameter in both returned instrument, 'mcpl_filename'.
-    pre, post = instr.mcpl_split(split_at, remove_unused_parameters=True)
+    if mcpl_output_parameters is not None:
+        mcpl_output_parameters = tuple(ComponentParameter(k, Expr.parse(v)) for k, v in mcpl_output_parameters.items())
+    if mcpl_input_parameters is not None:
+        mcpl_input_parameters = tuple(ComponentParameter(k, Expr.parse(v)) for k, v in mcpl_input_parameters.items())
+    pre, post = instr.mcpl_split(split_at,
+                                 output_component=mcpl_output_component,
+                                 output_parameters=mcpl_output_parameters,
+                                 input_component=mcpl_input_component,
+                                 input_parameters=mcpl_input_parameters,
+                                 remove_unused_parameters=True
+                                 )
     if output_split_instrs:
         for p in (pre, post):
             with open(f'{p.name}.instr', 'w') as f:
@@ -204,7 +194,8 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
                              dry_run=dry_run, parallel=parallel, gpu=gpu, process_count=process_count)
 
     splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, grid, precision,
-                      dry_run=dry_run, callback=callback, callback_arguments=callback_arguments, **runtime_arguments)
+                      dry_run=dry_run, parallel=parallel, gpu=gpu, process_count=process_count,
+                      callback=callback, callback_arguments=callback_arguments, **runtime_arguments)
 
 
 def splitrun_pre(instr, parameters, grid, precision: dict[str, float],
@@ -259,6 +250,7 @@ def _pre_step(instr, entry, names, precision, translate, kw, min_pc, max_pc, dry
 
 def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, grid, precision: dict[str, float],
                       summary=True, dry_run=False, callback=None, callback_arguments: dict[str, str] | None = None,
+                      parallel=False, gpu=False, process_count=0,
                       **runtime_arguments):
     from pathlib import Path
     from .cache import cache_instr, cache_get_simulation
@@ -267,7 +259,7 @@ def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, gri
     from .instr import collect_parameter_dict
     from .tables import best_simulation_entry_match
     from .emulate import mccode_sim_io, mccode_dat_io, mccode_dat_line
-    instr_entry = cache_instr(post, mpi=False, acc=False)
+    instr_entry = cache_instr(post, mpi=parallel, acc=gpu)
     args = regular_mccode_runtime_dict(runtime_arguments)
     sit_kw = {'seed': args.get('seed'), 'ncount': args.get('ncount'), 'gravitation': args.get('gravitation', False)}
     # recombine the parameters to ensure the 'correct' scan is performed
@@ -308,7 +300,7 @@ def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, gri
         # TODO Use the following line instead of the one after it when McCode is fixed to use zero-padded folder names
         # # runtime_arguments['dir'] = args["dir"].joinpath(str(number).zfill(n_zeros))
         runtime_arguments['dir'] = args['dir'].joinpath(str(number))
-        do_secondary_simulation(sim_entry, instr_entry, secondary_pars, runtime_arguments, dry_run=dry_run)
+        do_secondary_simulation(sim_entry, instr_entry, secondary_pars, runtime_arguments, dry_run=dry_run, process_count=process_count)
         if summary and not dry_run:
             # the data file has *all* **scanned** parameters recorded for each step:
             detectors, line = mccode_dat_line(runtime_arguments['dir'], {k: v for k,v in zip(names, values)})
@@ -332,7 +324,8 @@ def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, gri
 
 
 def _args_pars_mcpl(args: dict, params: dict, mcpl_filename) -> str:
-    # Combine the arguments, parameters, and mcpl filename into a single command-arguments string:
+    """Combine the arguments, parameters, and mcpl filename into a single command-arguments string:"""
+    from mccode_antlr.run.runner import mccode_runtime_dict_to_args_list
     first = ' '.join(mccode_runtime_dict_to_args_list(args))
     second = ' '.join([f'{k}={v}' for k, v in params.items()])
     third = f'mcpl_filename={mcpl_filename}'
@@ -457,7 +450,8 @@ def repeat_simulation_until(count, runner, args: dict, parameters, work_dir: Pat
     combine_mccode_sims_in_directories(outputs, work_dir)
 
 
-def do_secondary_simulation(p_sit: SimulationEntry, entry: InstrEntry, pars: dict, args: dict, dry_run: bool = False):
+def do_secondary_simulation(p_sit: SimulationEntry, entry: InstrEntry, pars: dict, args: dict, dry_run: bool = False,
+                            process_count: int = 0):
     from zenlog import log
     from pathlib import Path
     from shutil import copy
@@ -475,7 +469,7 @@ def do_secondary_simulation(p_sit: SimulationEntry, entry: InstrEntry, pars: dic
 
     mcpl_path = mcpl_real_filename(Path(p_sit.output_path).joinpath(mcpl_filename))
     executable = Path(entry.binary_path)
-    target = CBinaryTarget(mpi=entry.mpi, acc=entry.acc, count=1 if not entry.mpi else 0, nexus=False)
+    target = CBinaryTarget(mpi=entry.mpi, acc=entry.acc, count=process_count, nexus=False)
     run_compiled_instrument(executable, target, _args_pars_mcpl(args, pars, mcpl_path), capture=False, dry_run=dry_run)
 
     if not dry_run:
