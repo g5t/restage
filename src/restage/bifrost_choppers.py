@@ -82,9 +82,7 @@ def bandwidth_chopper_speeds_phases(energy_minimum: float):
     return SOURCE_FREQUENCY, phase, -SOURCE_FREQUENCY, phase
 
 
-def calculate(order: float, time: float, energy: float, names: list[str] | None = None):
-    if names is None or len(names) != 6:
-        names = ['ps1', 'ps2', 'fo1', 'fo2', 'bw1', 'bw2']
+def calculate(order: float, time: float, energy: float, names: tuple[str, ...]):
     a, b, c, d, e, f = names
     s, p = 'speed', 'phase'
     r = dict()
@@ -94,9 +92,12 @@ def calculate(order: float, time: float, energy: float, names: list[str] | None 
     return r
 
 
-def main(order: float, time: float, energy: float, names: list[str] | None = None):
+def main(order: float, time: float, energy: float, names: tuple[str, ...] | None = None):
     if names is None or len(names) != 6:
-        names = ['ps1', 'ps2', 'fo1', 'fo2', 'bw1', 'bw2']
+        # names = ('ps1', 'ps2', 'fo1', 'fo2', 'bw1', 'bw2')
+        names = ('pulse_shaping_chopper_1', 'pulse_shaping_chopper_2',
+                 'frame_overlap_chopper_1', 'frame_overlap_chopper_2',
+                 'bandwidth_chopper_1', 'bandwidth_chopper_2')
     rep = calculate(order, time, energy, names)
     print(' '.join([f'{k}={v}' for k, v in rep.items()]))
 
