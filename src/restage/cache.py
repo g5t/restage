@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from mccode_antlr.instr import Instr
 from .tables import InstrEntry, SimulationTableEntry, SimulationEntry
-from mccode_antlr.compiler.c import CBinaryTarget
 
 
 def setup_database(named: str):
@@ -54,6 +53,8 @@ def _compile_instr(entry: InstrEntry, instr: Instr, config: dict | None = None,
         generator = MCSTAS_GENERATOR
 
     output = directory_under_module_data_path('bin')
+    # TODO consider adding `dump_source=True` _and_ putting the resulting file into
+    #      the cache in order to make debugging future problems a tiny bit easier.
     binary_path = compile_instrument(instr, target, output, generator=generator, config=config)
     entry.mccode_version = __version__
     entry.binary_path = str(binary_path)
