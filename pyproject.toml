@@ -8,15 +8,23 @@ dependencies = [
     'zenlog>=1.1',
     'platformdirs>=3.11',
     'psutil>=5.9.6',
-    "importlib_metadata; python_version<'3.8'",
     'mccode-antlr[hdf5]>=0.10.2',
 ]
 readme = "README.md"
+license = {text = "BSD-3-Clause"}
+requires-python = ">=3.9"
 authors = [
     { name = "Gregory Tucker", email = "gregory.tucker@ess.eu" },
 ]
 classifiers = [
     "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 dynamic = ["version"]
 
@@ -35,10 +43,9 @@ legacy_tox_ini = """
     [tox]
     min_version = 4.0
     env_list =
+        py313
         py312
         py311
-        py310
-        py39
         type
 
     [testenv]
