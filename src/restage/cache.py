@@ -55,7 +55,7 @@ def _compile_instr(entry: InstrEntry, instr: Instr, config: dict | None = None,
     output = directory_under_module_data_path('bin')
     # TODO consider adding `dump_source=True` _and_ putting the resulting file into
     #      the cache in order to make debugging future problems a tiny bit easier.
-    binary_path = compile_instrument(instr, target, output, generator=generator, config=config)
+    binary_path = compile_instrument(instr, target, output, generator=generator, config=config, dump_source=True)
     entry.mccode_version = __version__
     entry.binary_path = str(binary_path)
     return entry

@@ -121,6 +121,14 @@ def splitrun_from_file(args, parameters, precision):
     splitrun_args(instr, parameters, precision, args)
 
 
+def give_me_an_integer(something):
+    if isinstance(something, (list, tuple)):
+        return something[0]
+    if isinstance(something, int):
+        return something
+    return 0
+
+
 def splitrun_args(instr, parameters, precision, args, **kwargs):
     splitrun(instr, parameters, precision, split_at=args.split_at[0], grid=args.mesh,
              seed=args.seed[0] if args.seed is not None else None,
@@ -135,7 +143,7 @@ def splitrun_args(instr, parameters, precision, args, **kwargs):
              dry_run=args.dryrun,
              parallel=args.parallel,
              gpu=args.gpu,
-             process_count=args.process_count[0] if args.process_count is not None else None,
+             process_count=give_me_an_integer(args.process_count),
              mcpl_output_component=args.mcpl_output_component[0] if args.mcpl_output_component is not None else None,
              mcpl_output_parameters=args.mcpl_output_parameters,
              mcpl_input_component=args.mcpl_input_component[0] if args.mcpl_input_component is not None else None,
@@ -425,6 +433,7 @@ def repeat_simulation_until(count, runner, args: dict, parameters, work_dir: Pat
         random.seed(args['seed'])
 
     files, outputs, counts = [], [], []
+    total_count = 0
     while goal - sum(counts) > 0:
         if len(counts) and counts[-1] <= 0:
             log.warn(f'No particles emitted in previous run, stopping')
@@ -441,6 +450,7 @@ def repeat_simulation_until(count, runner, args: dict, parameters, work_dir: Pat
         # recycle the intended-output mcpl filename to avoid breaking mcpl file-merging
         runner(_args_pars_mcpl(args, parameters, mcpl_filepath))
         counts.append(mcpl_particle_count(mcpl_filepath))
+        total_count += args['ncount']
         # rename the outputfile to this run's filename
         files[-1] = mcpl_rename_file(mcpl_filepath, files[-1])
 
