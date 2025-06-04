@@ -60,7 +60,6 @@ def mcpl_merge_files(files: list[Path], filepath: Path, keep_originals: bool = F
     filename = filepath.with_suffix(ext).as_posix()
 
     command = ['mcpltool', '--merge', filename] + [str(f) for f in real_filenames]
-    command = ['renormalize-combine', '--output', filename] + [str(f) for f in real_filenames]
     result = run(command)
     if result.returncode != 0:
         raise RuntimeError(f'mcpltool failed with return code {result.returncode} for command {" ".join(command)}')

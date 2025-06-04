@@ -18,22 +18,10 @@ def load_instr(filepath: Union[str, Path]) -> Instr:
     if not filepath.exists() or not filepath.is_file():
         raise ValueError(f'The provided {filepath=} does not exist or is not a file')
 
-    # FIXME this hack should be removed ASAP
-    from mccode_antlr.reader import GitHubRegistry
-    mcpl_input_once_registry = GitHubRegistry(
-        name='denormalize-mcpl',
-        url='https://github.com/mcdotstar/denormalize-mcpl',
-        version='main',
-        filename='pooch-registry.txt'
-    )
-    extra_registries = [mcpl_input_once_registry]
-
     if filepath.suffix == '.instr':
-        return load_mcstas_instr(filepath, registries=extra_registries)
+        return load_mcstas_instr(filepath)
 
-    instr = load_hdf5(filepath)
-    instr.registries += tuple(extra_registries)
-    return instr
+    return load_hdf5(filepath)
 
 
 def collect_parameter_dict(instr: Instr, kwargs: dict, strict: bool = True) -> dict:
