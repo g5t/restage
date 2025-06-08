@@ -66,9 +66,7 @@ class ROCacheTestCase(unittest.TestCase):
         restage.cache.FILESYSTEM.db_write = self.orig_rw_db
 
         for file in (self.ro_db_file, self.rw_db_file):
-            if file.exists():
-                file.unlink()
-            del file
+            file.unlink(missing_ok=True)
         for directory in (self.ro_dir, self.rw_dir):
             if directory.exists():
                 directory.rmdir()
