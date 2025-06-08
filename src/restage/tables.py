@@ -14,6 +14,11 @@ def utc_timestamp() -> float:
     return datetime.now(timezone.utc).timestamp()
 
 
+def str_hash(string):
+    from hashlib import sha3_256
+    return sha3_256(string.encode('utf-8')).hexdigest()
+
+
 COMMON_COLUMNS = ['seed', 'ncount', 'output_path', 'gravitation', 'creation', 'last_access']
 
 
@@ -323,27 +328,30 @@ class InstrEntry:
     id: str = field(default_factory=uuid)
     creation: float = field(default_factory=utc_timestamp)
     last_access: float = field(default_factory=utc_timestamp)
+    file_hash: str = field(default_factory=str)
 
     @classmethod
     def from_query_result(cls, values):
-        fid, file_contents, mpi, acc, binary_path, mccode_version, creation, last_access = values
-        return cls(file_contents, mpi != 0, acc != 0, binary_path, mccode_version, fid, creation, last_access)
+        fid, file_hash, file_contents, mpi, acc, binary_path, mccode_version, creation, last_access = values
+        return cls(file_contents, mpi != 0, acc != 0, binary_path, mccode_version, fid, creation, last_access, file_hash)
 
     def __post_init__(self):
         if len(self.mccode_version) == 0:
             from mccode_antlr import __version__
             self.mccode_version = __version__
+        if len(self.file_hash) == 0:
+            self.file_hash = str_hash(self.file_contents)
 
     @staticmethod
     def columns():
-        return ['id', 'file_contents', 'mpi', 'acc', 'binary_path', 'mccode_version', 'creation', 'last_access']
+        return ['id', 'file_hash', 'file_contents', 'mpi', 'acc', 'binary_path', 'mccode_version', 'creation', 'last_access']
 
     def values(self):
-        str_values = [f"'{x}'" for x in (self.id, self.file_contents, self.binary_path, self.mccode_version)]
+        str_values = [f"'{x}'" for x in (self.id, self.file_hash, self.file_contents, self.binary_path, self.mccode_version)]
         int_values = [f'{x}' for x in (self.mpi, self.acc)]
         flt_values = [f'{self.creation}', f'{self.last_access}']
-        # matches id, file_contents, mpi, acc, binary_path, mccode_version, creation, last_access order
-        return str_values[:2] + int_values + str_values[2:] + flt_values
+        # matches id, file_hash, file_contents, mpi, acc, binary_path, mccode_version, creation, last_access order
+        return str_values[:3] + int_values + str_values[3:] + flt_values
 
     @classmethod
     def create_sql_table(cls, table_name: str = 'instr_files'):

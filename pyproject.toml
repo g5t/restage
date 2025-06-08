@@ -7,6 +7,7 @@ name = "restage"
 dependencies = [
     'zenlog>=1.1',
     'platformdirs>=3.11',
+    'confuse',
     'psutil>=5.9.6',
     'mccode-antlr[hdf5]>=0.10.2',
 ]

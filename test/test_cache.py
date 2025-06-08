@@ -12,8 +12,8 @@ class CacheTestCase(unittest.TestCase):
         self.db_file = self.db_dir.joinpath('test_database.db')
         self.db = Database(self.db_file)
 
-        self.orig_db = restage.cache.DATABASE
-        restage.cache.DATABASE = self.db
+        self.orig_db = restage.cache.FILESYSTEM.db_write
+        restage.cache.FILESYSTEM.db_write = self.db
 
         contents = """DEFINE INSTRUMENT simple_test_instrument(
                     par1, double par2, int par3, par4=1, string par5="string", double par6=6.6
@@ -28,7 +28,7 @@ class CacheTestCase(unittest.TestCase):
 
     def tearDown(self) -> None:
         import restage.cache
-        restage.cache.DATABASE = self.orig_db
+        restage.cache.FILESYSTEM.db_write = self.orig_db
         del self.orig_db
 
         del self.db

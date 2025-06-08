@@ -84,3 +84,35 @@ splitrun my_instrument.instr -n 1000000 -d /data/output sample_angle=1:90 sample
 
 
 
+## Cached data
+### Default writable cache
+A `sqlite3` database is used to keep track of instrument stages, their compiled
+binaries, and output file(s) produced by, e.g., `splitrun` simulations.
+The default database location is determined by `platformdirs` under a folder
+set by `user_cache_path('restage', 'ess')` and the default locations for 
+`restage`-compiled instrument binaries and simulation output is determined from
+`user_data_path('restage', 'ess')`.
+
+### Override the database and output locations
+These default locations can be overridden by setting the `RESTAGE_CACHE` environment
+variable to a writeable folder, e.g., `export RESTAGE_CACHE="/tmp/ephemeral"`.
+
+### Read-only cache database(s)
+Any number of fixed databases can be provided to allow for, e.g., system-wide reuse
+of common staged simulations.
+The location(s) of these database file(s) can be specified as a single
+environment variable containing space-separated file locations, e.g.,
+`export RESTAGE_FIXED="/usr/local/restage /afs/ess.eu/restage"`.
+If the locations provided include a `database.db` file, they will be used to search
+for instrument binaries and simulation output directories.
+
+### Use a configuration file to set parameters
+Cache configuration information can be provided via a configuration file at, 
+e.g., `~/.config/restage/config.yaml`, like
+```yaml
+cache: /tmp/ephemeral
+fixed: /usr/local/restage /afs/ess.eu/restage
+```
+The exact location searched to find the configuration file is platform dependent,
+please consult the [`confuse` documentation](https://confuse.readthedocs.io/en/latest/usage.html)
+for the paths used on your system.
