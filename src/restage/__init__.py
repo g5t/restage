@@ -12,7 +12,6 @@ from .tables import (SimulationEntry,
                      InstrEntry
                      )
 from .database import Database
-from .cache import DATABASE
 
 
 try:
@@ -28,5 +27,4 @@ __all__ = [
     'NexusStructureEntry',
     'InstrEntry',
     'Database',
-    'DATABASE'
 ]

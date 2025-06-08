@@ -1,24 +1,92 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
 from mccode_antlr.instr import Instr
 from .tables import InstrEntry, SimulationTableEntry, SimulationEntry
+from .database import Database
+
+@dataclass
+class FileSystem:
+    root: Path
+    db_fixed: tuple[Database,...]
+    db_write: Database
+
+    @classmethod
+    def from_config(cls, named: str):
+        from .config import config
+        db_fixed = []
+        db_write = None
+        root = None
+        if not named.endswith('.db'):
+            named += '.db'
+        if config['cache'].exists():
+            path = config['cache'].as_path()
+            if not path.exists():
+                path.mkdir(parents=True)
+            db_write = Database(path / named)
+            root = path
+        if config['fixed'].exists():
+            more = [Path(c) for c in config['fixed'].as_str_seq() if Path(c).exists()]
+            for m in more:
+                db_fixed.append(Database(m / named, readonly=True))
+        if db_write is not None and db_write.readonly:
+            raise ValueError("Specified writable database location is readonly")
+        if db_write is None:
+            from platformdirs import user_cache_path
+            db_write = Database(user_cache_path('restage', 'ess', ensure_exists=True) / named)
+        if root is None:
+            from platformdirs import user_data_path
+            root = user_data_path('restage', 'ess')
+        return cls(root, tuple(db_fixed), db_write)
+
+    def query(self, method, *args, **kwargs):
+        q = [x for r in self.db_fixed for x in getattr(r, method)(*args, **kwargs)]
+        q.extend(getattr(self.db_write, method)(*args, **kwargs))
+        return q
+
+    def insert(self, method, *args, **kwargs):
+        getattr(self.db_write, method)(*args, **kwargs)
+
+    def query_instr_file(self, *args, **kwargs):
+        query = [x for r in self.db_fixed for x in r.query_instr_file(*args, **kwargs)]
+        query.extend(self.db_write.query_instr_file(*args, **kwargs))
+        return query
+
+    def insert_instr_file(self, *args, **kwargs):
+        self.db_write.insert_instr_file(*args, **kwargs)
+
+    def query_simulation_table(self, *args, **kwargs):
+        return self.query('query_simulation_table', *args, **kwargs)
+
+    def retrieve_simulation_table(self, *args, **kwargs):
+        return self.query('retrieve_simulation_table', *args, **kwargs)
+
+    def insert_simulation_table(self, *args, **kwargs):
+        self.insert('insert_simulation_table', *args, **kwargs)
+
+    def insert_simulation(self, *args, **kwargs):
+        # By definition, 'self.db_write' is writable and Database.insert_simulation
+        # _always_ ensures the presence of the specified table in its database.
+        # Therefore this method 'just works'.
+        self.insert('insert_simulation', *args, **kwargs)
+
+    def retrieve_simulation(self, table_id: str, row: SimulationEntry):
+        matches = []
+        for db in self.db_fixed:
+            if len(db.retrieve_simulation_table(table_id, False)) == 1:
+                matches.extend(db.retrieve_simulation(table_id, row))
+        if len(self.db_write.retrieve_simulation_table(table_id, False)) == 1:
+            matches.extend(self.db_write.retrieve_simulation(table_id, row))
+        return matches
 
 
-def setup_database(named: str):
-    from platformdirs import user_cache_path
-    from .database import Database
-    db_file = user_cache_path('restage', 'ess', ensure_exists=True).joinpath(f'{named}.db')
-    db = Database(db_file)
-    return db
 
-
-# Create the global database object in the module namespace.
-DATABASE = setup_database('database')
+FILESYSTEM = FileSystem.from_config('database')
 
 
 def module_data_path(sub: str):
-    from platformdirs import user_data_path
-    path = user_data_path('restage', 'ess').joinpath(sub)
+    path = FILESYSTEM.root / sub
     if not path.exists():
         path.mkdir(parents=True)
     return path
@@ -40,7 +108,6 @@ def directory_under_module_data_path(sub: str, prefix=None, suffix=None, name=No
 def _compile_instr(entry: InstrEntry, instr: Instr, config: dict | None = None,
                    mpi: bool = False, acc: bool = False,
                    target=None, generator=None):
-    from tempfile import mkdtemp
     from mccode_antlr import __version__
     from mccode_antlr.compiler.c import compile_instrument, CBinaryTarget
     if config is None:
@@ -55,6 +122,8 @@ def _compile_instr(entry: InstrEntry, instr: Instr, config: dict | None = None,
     output = directory_under_module_data_path('bin')
     # TODO consider adding `dump_source=True` _and_ putting the resulting file into
     #      the cache in order to make debugging future problems a tiny bit easier.
+    # FIXME a future mccode-antlr will support setting 'source_file={file_path}'
+    #       to allow exactly this.
     binary_path = compile_instrument(instr, target, output, generator=generator, config=config, dump_source=True)
     entry.mccode_version = __version__
     entry.binary_path = str(binary_path)
@@ -64,9 +133,9 @@ def _compile_instr(entry: InstrEntry, instr: Instr, config: dict | None = None,
 def cache_instr(instr: Instr, mpi: bool = False, acc: bool = False, mccode_version=None, binary_path=None, **kwargs) -> InstrEntry:
     instr_contents = str(instr)
     # the query returns a list[InstrTableEntry]
-    query = DATABASE.query_instr_file(search={'file_contents': instr_contents, 'mpi': mpi, 'acc': acc})
+    query = FILESYSTEM.query_instr_file(search={'file_contents': instr_contents, 'mpi': mpi, 'acc': acc})
     if len(query) > 1:
-        raise RuntimeError(f"Multiple entries for {instr_contents} in {DATABASE.instr_file_table}")
+        raise RuntimeError(f"Multiple entries for {instr_contents} in {FILESYSTEM}")
     elif len(query) == 1:
         return query[0]
 
@@ -75,8 +144,17 @@ def cache_instr(instr: Instr, mpi: bool = False, acc: bool = False, mccode_versi
     if binary_path is None:
         instr_file_entry = _compile_instr(instr_file_entry, instr, mpi=mpi, acc=acc, **kwargs)
 
-    DATABASE.insert_instr_file(instr_file_entry)
+    FILESYSTEM.insert_instr_file(instr_file_entry)
     return instr_file_entry
+
+
+def cache_get_instr(instr: Instr, mpi: bool = False, acc: bool = False) -> InstrEntry | None:
+    query = FILESYSTEM.query_instr_file(search={'file_contents': str(instr), 'mpi': mpi, 'acc': acc})
+    if len(query) > 1:
+        raise RuntimeError(f"Multiple entries for {instr} in {FILESYSTEM}")
+    elif len(query) == 1:
+        return query[0]
+    return None
 
 
 def verify_table_parameters(table, parameters: dict):
@@ -89,108 +167,31 @@ def verify_table_parameters(table, parameters: dict):
 
 
 def cache_simulation_table(entry: InstrEntry, row: SimulationEntry) -> SimulationTableEntry:
-    query = DATABASE.retrieve_simulation_table(entry.id)
-    if len(query) > 1:
-        raise RuntimeError(f"Multiple entries for {entry.id} in {DATABASE.simulations_table}")
-    elif len(query):
-        table = verify_table_parameters(query[0], row.parameter_values)
+    query = FILESYSTEM.retrieve_simulation_table(entry.id)
+    if len(query):
+        for q in query:
+            verify_table_parameters(q, row.parameter_values)
+        table = query[0]
     else:
         table = SimulationTableEntry(list(row.parameter_values.keys()), f'pst_{entry.id}', entry.id)
-        DATABASE.insert_simulation_table(table)
+        FILESYSTEM.insert_simulation_table(table)
     return table
 
 
 def cache_has_simulation(entry: InstrEntry, row: SimulationEntry) -> bool:
     table = cache_simulation_table(entry, row)
-    query = DATABASE.retrieve_simulation(table.id, row)
+    query = FILESYSTEM.retrieve_simulation(table.id, row)
     return len(query) > 0
 
 
 def cache_get_simulation(entry: InstrEntry, row: SimulationEntry) -> list[SimulationEntry]:
     table = cache_simulation_table(entry, row)
-    query = DATABASE.retrieve_simulation(table.id, row)
+    query = FILESYSTEM.retrieve_simulation(table.id, row)
     if len(query) == 0:
-        raise RuntimeError(f"Expected 1 or more entry for {table.id} in {DATABASE.simulations_table}, got none")
+        raise RuntimeError(f"Expected 1 or more entry for {table.id} in {FILESYSTEM}, got none")
     return query
 
 
 def cache_simulation(entry: InstrEntry, simulation: SimulationEntry):
     table = cache_simulation_table(entry, simulation)
-    DATABASE.insert_simulation(table, simulation)
-
-
-def _cleanup_instr_table(allow_different=True):
-    """Look through the cache tables and remove any entries which are no longer valid"""
-    from pathlib import Path
-    from mccode_antlr import __version__
-    entries = DATABASE.all_instr_files()
-    for entry in entries:
-        if not entry.binary_path or not Path(entry.binary_path).exists():
-            DATABASE.delete_instr_file(entry.id)
-        elif allow_different and entry.mccode_version != __version__:
-            DATABASE.delete_instr_file(entry.id)
-            # plus remove the binary
-            Path(entry.binary_path).unlink()
-            # and its directory if it is empty (it's _probably_ empty, but we should make sure)
-            if not any(Path(entry.binary_path).parent.iterdir()):
-                Path(entry.binary_path).parent.rmdir()
-
-
-def _cleanup_simulations_table(keep_empty=False, allow_different=False, cleanup_directories=False):
-    """Look through the cached table listing simulation tables and remove any entries which are no longer valid"""
-    from pathlib import Path
-    for entry in DATABASE.retrieve_all_simulation_tables():
-        if not DATABASE.table_exists(entry.table_name):
-            DATABASE.delete_simulation_table(entry.id)
-            continue
-
-        # clean up the entries of the table
-        _cleanup_simulations(entry.id, keep_empty=keep_empty, cleanup_directories=cleanup_directories)
-        # and remove the table if it is empty
-        if not (keep_empty or len(DATABASE.retrieve_all_simulations(entry.id))):
-            DATABASE.delete_simulation_table(entry.id)
-            continue
-
-        # check that the column names all match
-        if not (allow_different or DATABASE.table_has_columns(entry.table_name, entry.parameters)):
-            # Remove the simulation output folders for each tabulated simulation:
-            if cleanup_directories:
-                for sim in DATABASE.retrieve_all_simulations(entry.id):
-                    sim_path = Path(sim.output_path)
-                    for item in sim_path.iterdir():
-                        item.unlink()
-                    sim_path.rmdir()
-            DATABASE.delete_simulation_table(entry.id)
-
-
-def _cleanup_nexus_table():
-    # TODO implement this`
-    pass
-
-
-def _cleanup_simulations(primary_id: str, keep_empty=False, cleanup_directories=False):
-    """Look through a cached simulations table's entries and remove any which are no longer valid"""
-    from pathlib import Path
-    entries = DATABASE.retrieve_all_simulations(primary_id)
-    for entry in entries:
-        # Does the table reference a missing simulation output directory?
-        if not Path(entry.output_path).exists():
-            DATABASE.delete_simulation(primary_id, entry.id)
-        # or an empty one?
-        elif not keep_empty and not any(Path(entry.output_path).iterdir()):
-            if cleanup_directories:
-                Path(entry.output_path).rmdir()
-            DATABASE.delete_simulation(primary_id, entry.id)
-        # TODO add a lifetime to check against?
-
-
-def cache_cleanup(keep_empty=False, allow_different=False, cleanup_directories=False):
-    _cleanup_instr_table(allow_different=allow_different)
-    _cleanup_nexus_table()
-    _cleanup_simulations_table(keep_empty=keep_empty, allow_different=allow_different,
-                               cleanup_directories=cleanup_directories)
-
-
-# FIXME auto cleanup is removing cached table entries incorrectly at the moment
-# # automatically clean up the cache when the module is loaded
-# cache_cleanup()
+    FILESYSTEM.insert_simulation(table, simulation)

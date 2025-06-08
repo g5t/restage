@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from .tables import SimulationEntry, SimulationTableEntry, NexusStructureEntry, InstrEntry
 
@@ -10,9 +11,13 @@ class Database:
                  nexus_structures_table: str | None = None,
                  simulations_table: str | None = None,
                  # secondary_simulations_table: str = None
+                 readonly: bool = False
                  ):
         from sqlite3 import connect
-        self.db = connect(db_file)
+        from os import access, W_OK
+        self.readonly = readonly or not access(db_file.parent, W_OK)
+        mode = 'ro' if self.readonly else 'rwc'
+        self.db = connect(f'file:{db_file}?mode={mode}', uri=True)
         self.cursor = self.db.cursor()
         self.instr_file_table = instr_file_table or 'instr_file'
         self.nexus_structures_table = nexus_structures_table or 'nexus_structures'
@@ -27,8 +32,11 @@ class Database:
                           # (self.secondary_simulations_table, SecondaryInstrSimulationTable)
                           ):
             if not self.table_exists(table):
-                self.cursor.execute(tt.create_sql_table(table_name=table))
-                self.db.commit()
+                if not self.readonly:
+                    self.cursor.execute(tt.create_sql_table(table_name=table))
+                    self.db.commit()
+                else:
+                    raise ValueError(f'Table {table} does not exist in readonly database {db_file}')
 
     def __del__(self):
         self.db.close()
@@ -46,6 +54,8 @@ class Database:
             raise RuntimeError(f"Table {table_name} does not exist")
 
     def insert_instr_file(self, instr_file: InstrEntry):
+        if self.readonly:
+            raise ValueError('Cannot insert into readonly database')
         command = instr_file.insert_sql_table(table_name=self.instr_file_table)
         self.announce(command)
         self.cursor.execute(command)
@@ -56,21 +66,39 @@ class Database:
         return [InstrEntry.from_query_result(x) for x in self.cursor.fetchall()]
 
     def query_instr_file(self, search: dict) -> list[InstrEntry]:
+        from .tables import str_hash
+        contents = None
+        if 'file_contents' in search:
+            # direct file content searches are slow (for large contents, at least)
+            # Each InstrEntry inserts a hash of its contents, which is probably unique,
+            # so pull-back any matches against that and then check full contents below
+            contents = search['file_contents']
+            del search['file_contents']
+            search['file_hash'] = str_hash(contents)
         query = f"SELECT * FROM {self.instr_file_table} WHERE "
         query += ' AND '.join([f"{k}='{v}'" if isinstance(v, str) else f"{k}={v}" for k, v in search.items()])
         self.announce(query)
         self.cursor.execute(query)
-        return [InstrEntry.from_query_result(x) for x in self.cursor.fetchall()]
+        results = [InstrEntry.from_query_result(x) for x in self.cursor.fetchall()]
+        if contents is not None:
+            # this check is _probably_ redundant, but on the off chance of a hash
+            # collision we can guarantee the returned InstrEntry matches:
+            results = [x for x in results if x.file_contents == contents]
+        return results
 
     def all_instr_files(self) -> list[InstrEntry]:
         self.cursor.execute(f"SELECT * FROM {self.instr_file_table}")
         return [InstrEntry.from_query_result(x) for x in self.cursor.fetchall()]
 
     def delete_instr_file(self, instr_id: str):
+        if self.readonly:
+            raise ValueError('Cannot delete from readonly database')
         self.cursor.execute(f"DELETE FROM {self.instr_file_table} WHERE id='{instr_id}'")
         self.db.commit()
 
     def insert_nexus_structure(self, nexus_structure: NexusStructureEntry):
+        if self.readonly:
+            raise ValueError('Cannot insert into readonly database')
         command = nexus_structure.insert_sql_table(table_name=self.nexus_structures_table)
         self.announce(command)
         self.cursor.execute(command)
@@ -81,6 +109,8 @@ class Database:
         return [NexusStructureEntry.from_query_result(x) for x in self.cursor.fetchall()]
 
     def insert_simulation_table(self, entry: SimulationTableEntry):
+        if self.readonly:
+            raise ValueError('Cannot insert into readonly database')
         command = entry.insert_sql_table(table_name=self.simulations_table)
         self.announce(command)
         self.cursor.execute(command)
@@ -94,7 +124,7 @@ class Database:
     def retrieve_simulation_table(self, primary_id: str, update_access_time=True) -> list[SimulationTableEntry]:
         self.cursor.execute(f"SELECT * FROM {self.simulations_table} WHERE id='{primary_id}'")
         entries = [SimulationTableEntry.from_query_result(x) for x in self.cursor.fetchall()]
-        if update_access_time:
+        if not self.readonly and update_access_time:
             from .tables import utc_timestamp
             self.cursor.execute(f"UPDATE {self.simulations_table} SET last_access='{utc_timestamp()}' "
                                 f"WHERE id='{primary_id}'")
@@ -106,6 +136,8 @@ class Database:
         return [SimulationTableEntry.from_query_result(x) for x in self.cursor.fetchall()]
 
     def delete_simulation_table(self, primary_id: str):
+        if self.readonly:
+            raise ValueError('Cannot delete from readonly database')
         matches = self.retrieve_simulation_table(primary_id)
         if len(matches) != 1:
             raise RuntimeError(f"Expected exactly one match for id={primary_id}, got {matches}")
@@ -121,6 +153,8 @@ class Database:
         return [SimulationTableEntry.from_query_result(x) for x in self.cursor.fetchall()]
 
     def _insert_simulation(self, sim: SimulationTableEntry, pars: SimulationEntry):
+        if self.readonly:
+            raise ValueError('Cannot insert into readonly database')
         if not self.table_exists(sim.table_name):
             command = sim.create_simulation_sql_table()
             self.announce(command)
@@ -136,7 +170,7 @@ class Database:
         query = f"SELECT * FROM {table} WHERE {pars.between_query()}"
         self.cursor.execute(query)
         entries = [SimulationEntry.from_query_result(columns, x) for x in self.cursor.fetchall()]
-        if update_access_time and len(entries):
+        if not self.readonly and update_access_time and len(entries):
             from .tables import utc_timestamp
             self.cursor.execute(f"UPDATE {table} SET last_access='{utc_timestamp()}' WHERE {pars.between_query()}")
             self.db.commit()
@@ -161,6 +195,8 @@ class Database:
         return self._retrieve_simulation(table, columns, pars)
 
     def delete_simulation(self, primary_id: str, simulation_id: str):
+        if self.readonly:
+            raise ValueError('Cannot delete from readonly database')
         matches = self.retrieve_simulation_table(primary_id)
         if len(matches) != 1:
             raise RuntimeError(f"Expected exactly one match for id={primary_id}, got {matches}")
