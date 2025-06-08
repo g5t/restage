@@ -21,8 +21,11 @@ class ROCacheTestCase(unittest.TestCase):
         from restage.instr import collect_parameter
         from restage import SimulationEntry
         from mccode_antlr.loader import parse_mcstas_instr
+
+        database_name = self.id().split('.')[-1] + '.db'
+
         self.ro_dir = Path(mkdtemp())
-        self.ro_db_file = self.ro_dir.joinpath('test_database.db')
+        self.ro_db_file = self.ro_dir.joinpath('ro_' + database_name)
         self.ro_db = Database(self.ro_db_file)
 
         self.orig_ro_db = restage.cache.FILESYSTEM.db_fixed
@@ -53,7 +56,7 @@ class ROCacheTestCase(unittest.TestCase):
 
         # Make a new writable database
         self.rw_dir = Path(mkdtemp())
-        self.rw_db_file = self.rw_dir.joinpath('test_database.db')
+        self.rw_db_file = self.rw_dir.joinpath('rw_' + database_name)
         self.rw_db = Database(self.rw_db_file)
         restage.cache.FILESYSTEM.db_write = self.rw_db
 
