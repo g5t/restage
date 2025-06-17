@@ -1,39 +1,29 @@
-import os
-from unittest import TestCase, mock
+from unittest import TestCase
+from unittest.mock import patch
 from pathlib import Path
-
-
-def restage_loaded():
-    import sys
-    return 'restage' in sys.modules or 'restage.config' in sys.modules
-
-
-def first(test):
-    import unittest
-    @unittest.skipIf(restage_loaded(), reason="Environment variable patching must be done before restage is loaded")
-    def first_test(*args, **kwargs):
-        return test(*args, **kwargs)
-    return first_test
+from importlib import reload
+import restage.config
 
 
 class SettingsTests(TestCase):
-    @first
-    @mock.patch.dict(os.environ, {"RESTAGE_CACHE": "/tmp/some/location"})
+    import os
+    @patch.dict(os.environ, {"RESTAGE_CACHE": "/tmp/some/location"})
     def test_restage_cache_config(self):
+        reload(restage.config)
         from restage.config import config
         self.assertTrue(config['cache'].exists())
         self.assertEqual(config['cache'].as_path(), Path('/tmp/some/location'))
 
-    @first
-    @mock.patch.dict(os.environ, {"RESTAGE_FIXED": "/tmp/some/location"})
+    @patch.dict(os.environ, {"RESTAGE_FIXED": "/tmp/some/location"})
     def test_restage_single_fixed_config(self):
+        reload(restage.config)
         from restage.config import config
         self.assertTrue(config['fixed'].exists())
         self.assertEqual(config['fixed'].as_path(), Path('/tmp/some/location'))
 
-    @first
-    @mock.patch.dict(os.environ, {'RESTAGE_FIXED': '/tmp/a /tmp/b /tmp/c'})
+    @patch.dict(os.environ, {'RESTAGE_FIXED': '/tmp/a /tmp/b /tmp/c'})
     def test_restage_multi_fixed_config(self):
+        reload(restage.config)
         from restage.config import config
         self.assertTrue(config['fixed'].exists())
         more = config['fixed'].as_str_seq()

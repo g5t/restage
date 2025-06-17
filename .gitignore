@@ -3,3 +3,4 @@
 *.pyc
 *__pychache__/
 *.c
+*.instr

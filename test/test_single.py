@@ -149,18 +149,10 @@ class SplitRunTestCase(unittest.TestCase):
     def _define_instr(self):
         from math import pi, asin, sqrt
         from mccode_antlr.reader import MCSTAS_REGISTRY
-        from mccode_antlr.reader import GitHubRegistry
         from mccode_antlr.loader.loader import parse_mccode_instr
 
         def parse(contents):
-            # registries = [LocalRegistry(name='test_files', root=Path(__file__).parent.as_posix()), MCSTAS_REGISTRY]
-            mcpl_input_once_registry = GitHubRegistry(
-                name='mcpl_input_once',
-                url='https://github.com/g5t/mccode-mcpl-input-once',
-                version='main',
-                filename='pooch-registry.txt'
-            )
-            registries = [MCSTAS_REGISTRY, mcpl_input_once_registry]
+            registries = [MCSTAS_REGISTRY]
             return parse_mccode_instr(contents, registries, '<test string>')
 
         d_spacing = 3.355  # (002) for Highly-ordered Pyrolytic Graphite
@@ -241,8 +233,13 @@ class SplitRunTestCase(unittest.TestCase):
             output.mkdir(parents=True)
 
         # run the scan
-        splitrun(self.instr, scan, precision={}, split_at='split_at', grid=False, ncount=10_000, dir=output,
-                 mcpl_input_component='MCPL_input_once')
+        splitrun(self.instr, scan, precision={}, split_at='split_at', grid=False,
+                 ncount=10_000,
+                 dir=output,
+                 mcpl_output_parameters={'weight_mode': '1'},
+                 mcpl_input_component='MCPL_input_once',
+                 mcpl_input_parameters={'preload': '1'}
+                 )
 
         # check the scan directory for output
         for x in self.dir.glob('**/*.dat'):
@@ -261,6 +258,13 @@ class SplitRunTestCase(unittest.TestCase):
         default installed location, /usr/local/lib64/libmcpl.so; so this test must
         be invoked with that location specified, e.g.,
             $ LD_LIBRARY_PATH=/usr/local/lib64 pytest test/test_single.py -k test_parallel_scan
+
+        Another potential issue to address, the `MCPL_*.comp` components may use a
+        special `@MCPLFLAGS@` directive to read flags from a configuration file instead
+        of using the provided `mcpl-config --show buildflags` command.
+        You might need to use `mccode-antlr config save -v` to create/locate the
+        mccode-antlr `config.yml` file then edit/add the entry for `flags.mcpl` with
+        the output of the tool above.
         """
         from restage.splitrun import splitrun
         from restage.range import parse_scan_parameters
@@ -270,7 +274,10 @@ class SplitRunTestCase(unittest.TestCase):
             output.mkdir(parents=True)
         splitrun(self.instr, scan, precision={}, split_at='split_at', grid=False, ncount=100_000, dir=output,
                  parallel=True, process_count=4,
-                 mcpl_input_component='MCPL_input_once', mcpl_input_parameters={'preload': '1'})
+                 mcpl_output_parameters={'weight_mode': '1'},
+                 mcpl_input_component='MCPL_input_once',
+                 mcpl_input_parameters={'preload': '1'}
+                 )
 
         # check the scan directory for output
         for x in self.dir.glob('**/*.dat'):

@@ -4,20 +4,26 @@ from pathlib import Path
 def mcpl_real_filename(filename: Path) -> Path:
     """MCPL_output from McCode instruments has the bad habit of changing the output file name silently.
     Find the _real_ output file name by looking for the expected variants"""
-    if filename.exists() and filename.is_file():
-        return filename
-    if filename.with_suffix('.mcpl').exists() and filename.with_suffix('.mcpl').is_file():
-        return filename.with_suffix('.mcpl')
-    if filename.with_suffix('.mcpl.gz').exists() and filename.with_suffix('.mcpl.gz').is_file():
-        return filename.with_suffix('.mcpl.gz')
+    base, ext = filename.parent / filename.stem, filename.suffix
+    if ext in ('.gz',):
+        ext = base.suffix + ext
+        base = base.parent / base.stem
+    extensions = {'.mcpl.gz', '.mcpl', ''}
+    if ext not in extensions:
+        ValueError(f'Unsupported file extension: {ext}')
+    for ext in extensions:
+        check = base.with_suffix(ext)
+        if check.exists() and check.is_file():
+            return check
+        print(f'{base} -> {check} not found')
     raise FileNotFoundError(f'Could not find MCPL file {filename}')
 
 
-# def mcpl_particle_count(filename):
-    # from mcpl import MCPLFile
-    # with MCPLFile(mcpl_real_filename(filename)) as f:
-    #     n = f.nparticles
-    # return n
+def mcpl_real_extension(filename: Path) -> str:
+    for ext in ('.mcpl.gz', '.mcpl'):
+        if str(filename).endswith(ext):
+            return ext
+    return ''
 
 
 def mcpl_particle_count(filename):
@@ -52,11 +58,7 @@ def mcpl_merge_files(files: list[Path], filepath: Path, keep_originals: bool = F
     from subprocess import run
     real_filenames = [mcpl_real_filename(f) for f in files]
     # if the real filenames have .mcpl or .mcpl.gz, the merged filename should too
-    ext = ''
-    if real_filenames[0].name.endswith('.mcpl.gz'):
-        ext = '.mcpl.gz'
-    elif real_filenames[0].name.endswith('.mcpl'):
-        ext = '.mcpl'
+    ext = mcpl_real_extension(real_filenames[0])
     filename = filepath.with_suffix(ext).as_posix()
 
     command = ['mcpltool', '--merge', filename] + [str(f) for f in real_filenames]
@@ -69,13 +71,8 @@ def mcpl_merge_files(files: list[Path], filepath: Path, keep_originals: bool = F
 
 
 def mcpl_rename_file(source: Path, dest: Path, strict: bool = False):
-    filepath = mcpl_real_filename(source)
-    filename = filepath.name  # this could be '{name}', '{name}.mcpl', or '{name}.mcpl.gz'
-    ext = ''
-    if filepath.name.endswith('.mcpl.gz'):
-        ext = '.mcpl.gz'
-    elif filepath.name.endswith('.mcpl'):
-        ext = '.mcpl'
+    filepath = mcpl_real_filename(source) # this could be '{name}', '{name}.mcpl', or '{name}.mcpl.gz'
+    ext = mcpl_real_extension(filepath)
 
     if not dest.name.endswith(ext):
         if strict:
