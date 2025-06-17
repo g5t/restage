@@ -31,3 +31,13 @@ class SettingsTests(TestCase):
         self.assertEqual(Path(more[0]), Path('/tmp/a'))
         self.assertEqual(Path(more[1]), Path('/tmp/b'))
         self.assertEqual(Path(more[2]), Path('/tmp/c'))
+
+    def test_restage_standard_config(self):
+        from os import environ
+        reload(restage.config)
+        from restage.config import config
+        if 'cache' in config:
+            self.assertEqual(config['cache'].as_path(), Path(environ['RESTAGE_CACHE']))
+        if 'fixed' in config:
+            self.assertEqual(config['fixed'].as_str(), environ['RESTAGE_FIXED'])
+
