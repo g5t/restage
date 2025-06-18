@@ -107,24 +107,20 @@ def directory_under_module_data_path(sub: str, prefix=None, suffix=None, name=No
 
 def _compile_instr(entry: InstrEntry, instr: Instr, config: dict | None = None,
                    mpi: bool = False, acc: bool = False,
-                   target=None, generator=None):
-    from mccode_antlr import __version__
+                   target=None, flavor=None):
+    from mccode_antlr import __version__, Flavor
     from mccode_antlr.compiler.c import compile_instrument, CBinaryTarget
     if config is None:
         config = dict(default_main=True, enable_trace=False, portable=False, include_runtime=True,
                       embed_instrument_file=False, verbose=False)
     if target is None:
         target = CBinaryTarget(mpi=mpi or False, acc=acc or False, count=1, nexus=False)
-    if generator is None:
-        from mccode_antlr.translators.target import MCSTAS_GENERATOR
-        generator = MCSTAS_GENERATOR
+    if flavor is None:
+        flavor = Flavor.MCSTAS
 
     output = directory_under_module_data_path('bin')
-    # TODO consider adding `dump_source=True` _and_ putting the resulting file into
-    #      the cache in order to make debugging future problems a tiny bit easier.
-    # FIXME a future mccode-antlr will support setting 'source_file={file_path}'
-    #       to allow exactly this.
-    binary_path = compile_instrument(instr, target, output, generator=generator, config=config, dump_source=True)
+    source_file = output.joinpath(instr.name).with_suffix('.c')
+    binary_path = compile_instrument(instr, target, output, flavor=flavor, config=config, source_file=source_file)
     entry.mccode_version = __version__
     entry.binary_path = str(binary_path)
     return entry
