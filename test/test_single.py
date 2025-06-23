@@ -148,12 +148,7 @@ class SplitRunTestCase(unittest.TestCase):
 
     def _define_instr(self):
         from math import pi, asin, sqrt
-        from mccode_antlr.reader import MCSTAS_REGISTRY
-        from mccode_antlr.loader.loader import parse_mccode_instr
-
-        def parse(contents):
-            registries = [MCSTAS_REGISTRY]
-            return parse_mccode_instr(contents, registries, '<test string>')
+        from mccode_antlr.loader.loader import parse_mcstas_instr
 
         d_spacing = 3.355  # (002) for Highly-ordered Pyrolytic Graphite
         mean_energy = 5.0
@@ -193,7 +188,7 @@ class SplitRunTestCase(unittest.TestCase):
         COMPONENT detector = Monitor(xwidth=0.01, yheight=0.05) AT (0, 0, 0.8) RELATIVE sample_arm
         END
         """
-        return parse(instr), min_a1, max_a1
+        return parse_mcstas_instr(instr), min_a1, max_a1
 
     def setUp(self) -> None:
         from pathlib import Path
