@@ -9,7 +9,7 @@ dependencies = [
     'platformdirs>=3.11',
     'confuse',
     'psutil>=5.9.6',
-    'mccode-antlr[hdf5]>=0.13.0',
+    'mccode-antlr[hdf5]>=0.14.0',
 ]
 readme = "README.md"
 license = {text = "BSD-3-Clause"}

@@ -65,7 +65,7 @@ class SimulationEntry:
                     self.precision[k] = abs(self.precision[best[0]])
                 elif self.parameter_values[k].has_value:
                     # This abs is *crucial* since a negative parameter value would have a negative precision otherwise
-                    self.precision[k] = abs(self.parameter_values[k].value / 100)
+                    self.precision[k] = abs(self.parameter_values[k].value / 10000)
                 else:
                     log.info(f'SimulationEntry.__post_init__:: No precision match for value-less {k}, using 0.1;'
                              ' consider specifying precision dict during initialization')
