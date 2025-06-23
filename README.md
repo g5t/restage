@@ -30,21 +30,21 @@ pip install git+https://github.com/g5t/restage.git
 ```
 
 ## Usage
-### `restage`
-The `restage` module provides a function, `restage`, which takes a McStas instrument file as input.
-The function will then parse the instrument file and generate new instrument files for the first and second stage simulations.
-The new instrument files will be named `restaged_lower_<original instrument file name>.instr`,
-and `restaged_upper_<original instrument file name>.instr`, respectively.
 
 ### `splitrun`
-A more useful function, `splitrun`, is also provided by the `restage` module.
-The `splitrun` function takes the same arguments as the `restage` function,
-but will also run the simulations for the first and second stage.
-The function will return the output of the second stage simulation.
+The `restage` module provides a command line program, `splitrun`, which
+can be used as a replacement for the `mcrun` function distributed as part of McStas.
 
-The `splitrun` function can be used as a replacement for the `mcrun` function distributed as part of McStas.
-One optional argument, `splitpoint`, is added to the `splitrun` function; it should be the name of
-an `Arm` component inside the instrument file and defaults to `split_at`.
+`splitrun` produces two instrument stages, before and after a split point, and runs
+the specified parameter set(s) in both stages connecting the two through cached MCPL
+state files.
+The first stage results are stored in a user cache directory and the second stage output
+is placed under the working directory following the McStas `mcrun` convention.
+
+Command line flags and parameters are mostly the same as used by `mcrun` with a number
+of additions to support `splitrun`'s enhanced behavior.
+One optional argument, `split-at`, is added; it should be the name of
+an `Arm` component inside the instrument file and defaults to `mcpl_split`.
 In contrast to `mcrun`, instrument parameters for `splitrun` are specified as 'MATLAB'-range style keyword arguments.
 A valid range is inclusive of its end points and of the form `start:step:end` or `start:end` (with implicit `step=1`).
 
@@ -79,7 +79,7 @@ mcrun my_instrument.instr -N 90 -n 1000000 -d /data/output sample_angle=1,90 sam
 ```
 can be replaced by the `splitrun` command
 ```bash
-splitrun my_instrument.instr -n 1000000 -d /data/output sample_angle=1:90 sample_radius=10.0
+splitrun my_instrument.instr -n 1000000 --split-at split_at -d /data/output sample_angle=1:90 sample_radius=10.0
 ```
 
 
