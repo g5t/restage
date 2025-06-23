@@ -5,7 +5,7 @@ from .range import Singular
 
 def make_run_parser():
     from argparse import ArgumentParser
-    parser = ArgumentParser('mcbifrost_run')
+    parser = ArgumentParser('restage')
     parser.add_argument('primary', nargs=1, type=str, default=None,
                         help='Primary spectrometer `.instr` file name')
     parser.add_argument('secondary', nargs=1, type=str, default=None,
