@@ -26,7 +26,7 @@ class FileSystem:
                 path.mkdir(parents=True)
             db_write = Database(path / named)
             root = path
-        if config['fixed'].exists():
+        if config['fixed'].exists() and config['fixed'].get() is not None:
             more = [Path(c) for c in config['fixed'].as_str_seq() if Path(c).exists()]
             for m in more:
                 db_fixed.append(Database(m / named, readonly=True))
