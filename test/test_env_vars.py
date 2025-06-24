@@ -31,6 +31,15 @@ class SettingsTests(TestCase):
         self.assertEqual(more[1],'/tmp/b')
         self.assertEqual(more[2],'/tmp/c')
 
+    @patch.dict(os.environ, {"RESTAGE_FIXED": ''})
+    def test_restage_none_fixed_config(self):
+        reload(restage.config)
+        from restage.config import config
+        from confuse.exceptions import ConfigTypeError
+        self.assertTrue(config['fixed'].exists())
+        self.assertTrue(config['fixed'].get() is None)
+        self.assertRaises(ConfigTypeError, config['fixed'].as_str_seq)
+
     def test_restage_standard_config(self):
         from os import environ
         reload(restage.config)
