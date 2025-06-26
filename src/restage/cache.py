@@ -26,10 +26,18 @@ class FileSystem:
                 path.mkdir(parents=True)
             db_write = Database(path / named)
             root = path
+
+        def exists_not_root(roc):
+            roc = Path(roc)
+            if not roc.exists() or not (roc / named).exists():
+                return False
+            return root.resolve() != roc.resolve() if root is not None else True
+
         if config['fixed'].exists() and config['fixed'].get() is not None:
-            more = [Path(c) for c in config['fixed'].as_str_seq() if Path(c).exists()]
+            more = [Path(c) for c in config['fixed'].as_str_seq() if exists_not_root(c)]
             for m in more:
                 db_fixed.append(Database(m / named, readonly=True))
+
         if db_write is not None and db_write.readonly:
             raise ValueError("Specified writable database location is readonly")
         if db_write is None:

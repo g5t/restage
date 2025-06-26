@@ -1,3 +1,4 @@
+import os
 from unittest import TestCase
 from unittest.mock import patch
 from importlib import reload
@@ -39,6 +40,20 @@ class SettingsTests(TestCase):
         self.assertTrue(config['fixed'].exists())
         self.assertTrue(config['fixed'].get() is None)
         self.assertRaises(ConfigTypeError, config['fixed'].as_str_seq)
+
+    def test_missing_database_in_fixed_config(self):
+        from tempfile import TemporaryDirectory
+        from pathlib import Path
+        with TemporaryDirectory() as tmpdir:
+            self.assertFalse((Path(tmpdir) / 'database.db').exists())
+            with patch.dict(os.environ, {'RESTAGE_FIXED': tmpdir}):
+                reload(restage.config)
+                from restage.config import config
+                self.assertTrue(config['fixed'].exists())
+                self.assertEqual(config['fixed'].as_str(), tmpdir)
+                from restage.cache import FILESYSTEM
+                self.assertEqual(len(FILESYSTEM.db_fixed), 0)
+
 
     def test_restage_standard_config(self):
         from os import environ
