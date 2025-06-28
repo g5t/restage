@@ -3,31 +3,55 @@ from __future__ import annotations
 from pathlib import Path
 from .tables import SimulationEntry, InstrEntry
 
-def mcpl_parameter_split(s: str) -> tuple[str, str]:
-    k, v = s.split(':', 1)
-    return k, v
+def mcpl_parameters_split(s: str) -> list[tuple[str, str]]:
+    return [(k, v) for k, v in [kv.split(':', maxsplit=1) for kv in s.split(',')]]
+
+def si_int(s: str) -> int:
+    from loguru import logger
+    suffix_value = {
+        'k': 1000, 'M': 10 ** 6, 'G': 10 ** 9, 'T': 10 ** 12, 'P': 10 ** 15,
+        'Ki': 2 ** 10, 'Mi': 2 ** 20, 'Gi': 2 ** 30, 'Ti': 2 ** 40, 'Pi': 2 ** 50
+    }
+    def int_mult(x: str, mult: int = 1):
+        return int(x) * mult if x.isnumeric() else int(float(x) * mult)
+
+    def do_parse():
+        try:
+            if suffix := next(k for k in suffix_value if s.endswith(k)):
+                return int_mult(s[:-len(suffix)].strip(),  suffix_value[suffix])
+        except StopIteration:
+            pass
+        return int_mult(s)
+    value = do_parse()
+    if value < 0:
+        logger.info('Negative value encountered')
+    elif value > 2**53:
+        logger.info(
+            'McStas/McXtrace parse integer inputs as doubles,'
+            f' this requested {value=} will not be evaluated precisely'
+            ' since it is more than 2^53'
+        )
+    return value
 
 def make_splitrun_parser():
     from argparse import ArgumentParser
     parser = ArgumentParser('splitrun')
     aa = parser.add_argument
-    parser = ArgumentParser('splitrun')
-    aa = parser.add_argument
-    aa('instrument', nargs=1, type=str, default=None,
+    aa('instrument', type=str, default=None,
        help='Instrument `.instr` file name or serialised HDF5 Instr object')
     aa('parameters', nargs='*', type=str, default=None)
-    aa('-n', '--ncount', nargs=1, type=int, default=None, help='Number of neutrons to simulate')
+    aa('-n', '--ncount', type=si_int, default=None, help='Number of neutrons to simulate')
     aa('-m', '--mesh', action='store_true', default=False, help='N-dimensional mesh scan')
-    aa('-d', '--dir', nargs=1, type=str, default=None, help='Output directory')
-    aa('-s', '--seed', nargs=1, type=int, default=None, help='Random number generator seed')
+    aa('-d', '--dir', type=str, default=None, help='Output directory')
+    aa('-s', '--seed', type=int, default=None, help='Random number generator seed')
     aa('-t', '--trace', action='store_true', default=False, help='Enable tracing')
     aa('-g', '--gravitation', action='store_true', default=False,
        help='Enable gravitation for all trajectories')
-    aa('--bufsiz', nargs=1, type=int, default=None, help='Monitor_nD list/buffer-size')
-    aa('--format', nargs=1, type=str, default=None, help='Output data files using FORMAT')
-    aa('--nmin', nargs=1, type=int, default=None,
+    aa('--bufsiz', type=si_int, default=None, help='Monitor_nD list/buffer-size')
+    aa('--format', type=str, default=None, help='Output data files using FORMAT')
+    aa('--nmin', type=int, default=None,
        help='Minimum number of particles to simulate during first instrument simulations')
-    aa('--nmax', nargs=1, type=int, default=None,
+    aa('--nmax', type=int, default=None,
        help='Maximum number of particles to simulate during first instrument simulations')
     aa('--dryrun', action='store_true', default=False,
        help='Do not run any simulations, just print the commands')
@@ -35,17 +59,19 @@ def make_splitrun_parser():
        help='Use MPI multi-process parallelism (primary instrument only at the moment)')
     aa('--gpu', action='store_true', default=False,
        help='Use GPU OpenACC parallelism (primary instrument only at the moment)')
-    aa('--process-count',  nargs=1, type=int, default=0,
+    aa('--process-count', type=int, default=0,
        help='MPI process count, 0 == System Default')
     # splitrun controlling parameters
-    aa('--split-at', nargs=1, type=str, default=['mcpl_split'],
+    aa('--split-at', type=str, default='mcpl_split',
        help='Component at which to split -- DEFAULT: mcpl_split')
-    aa('--mcpl-output-component', nargs=1, type=str, default=None,
-       help='Inserted MCPL file producing component, MCPL_output(.comp) if not provided')
-    aa('--mcpl-input-component', nargs=1, type=str, default=None,
-       help='Inserted MCPL file consuming component, MCPL_input(.comp) if not provided')
-    aa('--mcpl-input-parameters', nargs='+', type=mcpl_parameter_split, metavar='key:value')
-    aa('--mcpl-output-parameters', nargs='+', type=mcpl_parameter_split, metavar='key:value')
+    aa('--mcpl-output-component', type=str, default=None,
+       help='Inserted MCPL file producing component, "MCPL_output" if not provided')
+    aa('--mcpl-input-component', type=str, default=None,
+       help='Inserted MCPL file consuming component, "MCPL_input" if not provided')
+    aa('--mcpl-input-parameters', type=mcpl_parameters_split,
+       metavar='in_parameter1:value1,in_parameter2:value2,...')
+    aa('--mcpl-output-parameters',type=mcpl_parameters_split,
+       metavar='out_parameter1:value1,out_parameter2:value2,...')
     aa('-P', action='append', default=[], help='Cache parameter matching precision')
 
     # Other McCode runtime arguments exist, but are likely not used during a scan:
@@ -117,36 +143,28 @@ def entrypoint():
 
 def splitrun_from_file(args, parameters, precision):
     from .instr import load_instr
-    instr = load_instr(args.instrument[0])
+    instr = load_instr(args.instrument)
     splitrun_args(instr, parameters, precision, args)
 
 
-def give_me_an_integer(something):
-    if isinstance(something, (list, tuple)):
-        return something[0]
-    if isinstance(something, int):
-        return something
-    return 0
-
-
 def splitrun_args(instr, parameters, precision, args, **kwargs):
-    splitrun(instr, parameters, precision, split_at=args.split_at[0], grid=args.mesh,
-             seed=args.seed[0] if args.seed is not None else None,
-             ncount=args.ncount[0] if args.ncount is not None else None,
-             out_dir=args.dir[0] if args.dir is not None else None,
+    splitrun(instr, parameters, precision, split_at=args.split_at, grid=args.mesh,
+             seed=args.seed,
+             ncount=args.ncount,
+             out_dir=args.dir,
              trace=args.trace,
              gravitation=args.gravitation,
-             bufsiz=args.bufsiz[0] if args.bufsiz is not None else None,
-             format=args.format[0] if args.format is not None else None,
-             minimum_particle_count=args.nmin[0] if args.nmin is not None else None,
-             maximum_particle_count=args.nmax[0] if args.nmax is not None else None,
+             bufsiz=args.bufsiz,
+             format=args.format,
+             minimum_particle_count=args.nmin,
+             maximum_particle_count=args.nmax,
              dry_run=args.dryrun,
              parallel=args.parallel,
              gpu=args.gpu,
-             process_count=give_me_an_integer(args.process_count),
-             mcpl_output_component=args.mcpl_output_component[0] if args.mcpl_output_component is not None else None,
+             process_count=args.process_count,
+             mcpl_output_component=args.mcpl_output_component,
              mcpl_output_parameters=args.mcpl_output_parameters,
-             mcpl_input_component=args.mcpl_input_component[0] if args.mcpl_input_component is not None else None,
+             mcpl_input_component=args.mcpl_input_component,
              mcpl_input_parameters=args.mcpl_input_parameters,
              **kwargs
              )

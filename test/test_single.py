@@ -32,53 +32,53 @@ class SingleTestCase(unittest.TestCase):
 
     def test_parsing(self):
         args = self.parser.parse_args(['test.instr', 'a=1', 'b=2', '--split-at=here', '-m'])
-        self.assertEqual(args.instrument, ['test.instr'])
+        self.assertEqual(args.instrument, 'test.instr')
         self.assertEqual(args.parameters, ['a=1', 'b=2'])
-        self.assertEqual(args.split_at, ['here'])
+        self.assertEqual(args.split_at, 'here')
         self.assertTrue(args.mesh)
 
     def test_mixed_parsing(self):
         from mccode_antlr.run.runner import sort_args
         args = self.parser.parse_args(sort_args(['test.instr', '-m', 'a=1', 'b=2', '--split-at=here']))
-        self.assertEqual(args.instrument, ['test.instr'])
+        self.assertEqual(args.instrument, 'test.instr')
         self.assertEqual(args.parameters, ['a=1', 'b=2'])
-        self.assertEqual(args.split_at, ['here'])
+        self.assertEqual(args.split_at, 'here')
         self.assertTrue(args.mesh)
 
     def test_mccode_flags(self):
         args = self.parser.parse_args(['test.instr', '-s', '123456', '-n', '-1', '-d', '/a/dir', '-t', '-g'])
-        self.assertEqual(args.seed, [123456])
-        self.assertEqual(args.ncount, [-1])
-        self.assertEqual(args.dir, ['/a/dir'])
+        self.assertEqual(args.seed, 123456)
+        self.assertEqual(args.ncount, -1)
+        self.assertEqual(args.dir, '/a/dir')
         self.assertEqual(args.trace, True)
         self.assertEqual(args.gravitation, True)
 
         args = self.parser.parse_args(['test.instr', '-s=99999', '-n=10000', '-d=/b/dir'])
-        self.assertEqual(args.seed, [99999])
-        self.assertEqual(args.ncount, [10000])
-        self.assertEqual(args.dir, ['/b/dir'])
+        self.assertEqual(args.seed, 99999)
+        self.assertEqual(args.ncount, 10000)
+        self.assertEqual(args.dir, '/b/dir')
         self.assertEqual(args.trace, False)
         self.assertEqual(args.gravitation, False)
 
         args = self.parser.parse_args(['test.instr', '--seed', '888', '--ncount', '4', '--dir', '/c/dir', '--trace',
                                        '--gravitation', '--bufsiz', '1000', '--format', 'NEXUS'])
-        self.assertEqual(args.seed, [888])
-        self.assertEqual(args.ncount, [4])
-        self.assertEqual(args.dir, ['/c/dir'])
+        self.assertEqual(args.seed, 888)
+        self.assertEqual(args.ncount, 4)
+        self.assertEqual(args.dir, '/c/dir')
         self.assertEqual(args.trace, True)
         self.assertEqual(args.gravitation, True)
-        self.assertEqual(args.bufsiz, [1000])
-        self.assertEqual(args.format, ['NEXUS'])
+        self.assertEqual(args.bufsiz, 1000)
+        self.assertEqual(args.format, 'NEXUS')
 
         args = self.parser.parse_args(['test.instr', '--seed=777', '--ncount=5', '--dir=/d/dir', '--bufsiz=2000',
                                        '--format=RAW'])
-        self.assertEqual(args.seed, [777])
-        self.assertEqual(args.ncount, [5])
-        self.assertEqual(args.dir, ['/d/dir'])
+        self.assertEqual(args.seed, 777)
+        self.assertEqual(args.ncount, 5)
+        self.assertEqual(args.dir, '/d/dir')
         self.assertEqual(args.trace, False)
         self.assertEqual(args.gravitation, False)
-        self.assertEqual(args.bufsiz, [2000])
-        self.assertEqual(args.format, ['RAW'])
+        self.assertEqual(args.bufsiz, 2000)
+        self.assertEqual(args.format, 'RAW')
 
     def test_parameters(self):
         from restage.range import MRange, Singular, parameters_to_scan, parse_scan_parameters
@@ -106,14 +106,14 @@ class SingleTestCase(unittest.TestCase):
 
     def test_mcpl_split_parameters(self):
         args = self.parser.parse_args(['test.instr', 'a=1.0', 'b=2', 'c=3:5', 'd=blah',  'e=/data',
-                                       '--mcpl-input-parameters', 'preload:1', 'v_smear:0.01'])
+                                       '--mcpl-input-parameters', 'preload:1,v_smear:0.01'])
         self.assertEqual(args.parameters, ['a=1.0', 'b=2', 'c=3:5', 'd=blah', 'e=/data'])
         self.assertEqual(args.mcpl_input_parameters, [('preload', '1'), ('v_smear', '0.01')])
         args = self.parser.parse_args(['new_tst.instr', '--mcpl-output-parameters', 'preload:1',
                                        '--mcpl-input-component=MCPL_input_once'])
         self.assertEqual(args.parameters, [])
         self.assertEqual(args.mcpl_output_parameters, [('preload', '1')])
-        self.assertEqual(args.mcpl_input_component, ['MCPL_input_once'])
+        self.assertEqual(args.mcpl_input_component, 'MCPL_input_once')
 
 
 class DictWranglingTestCase(unittest.TestCase):
