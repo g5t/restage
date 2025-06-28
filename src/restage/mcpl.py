@@ -15,7 +15,6 @@ def mcpl_real_filename(filename: Path) -> Path:
         check = base.with_suffix(ext)
         if check.exists() and check.is_file():
             return check
-        print(f'{base} -> {check} not found')
     raise FileNotFoundError(f'Could not find MCPL file {filename}')
 
 
