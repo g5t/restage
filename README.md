@@ -83,6 +83,22 @@ splitrun my_instrument.instr -n 1000000 --split-at split_at -d /data/output samp
 ```
 
 
+## MCPL components
+There are a small collection of `MCPL` input and output components that are provided
+along with the McStas and McXtrace distributions, and you may also decide to write your
+own specialized variant of those provided.
+By default `splitrun` will insert an `MCPL_output` component at the end of the first
+stage, and an `MCPL_input` component at the start of the second stage.
+Should you prefer to a different component, or need to provide parameter values for
+the components, these can be specified in the command line call to `splitrun`.
+
+Components are specified as their file name (minus the `.comp` extension) and
+parameters as comma-separated `key:value` pairs, e.g.:
+
+```bash
+splitrun -n 1M a3=0:179 --mcpl-input-component MCPL_input_once --mcpl-output-parameters weight_mode:1,double_prec:1 instr.h5 
+```
+
 
 ## Cached data
 ### Default writable cache
