@@ -10,17 +10,19 @@ from mccode_antlr.instr import Instr
 
 def load_instr(filepath: Union[str, Path]) -> Instr:
     """Loads an Instr object from a .instr file or a HDF5 file"""
-    from mccode_antlr.io import load_hdf5
-    from mccode_antlr.loader import load_mcstas_instr
-
     if not isinstance(filepath, Path):
         filepath = Path(filepath)
     if not filepath.exists() or not filepath.is_file():
         raise ValueError(f'The provided {filepath=} does not exist or is not a file')
 
     if filepath.suffix == '.instr':
+        from mccode_antlr.loader import load_mcstas_instr
         return load_mcstas_instr(filepath)
+    elif filepath.suffix.lower() == '.json':
+        from mccode_antlr.io.json import load_json
+        return load_json(filepath)
 
+    from mccode_antlr.io import load_hdf5
     return load_hdf5(filepath)
 
 

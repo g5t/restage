@@ -38,7 +38,7 @@ def make_splitrun_parser():
     parser = ArgumentParser('splitrun')
     aa = parser.add_argument
     aa('instrument', type=str, default=None,
-       help='Instrument `.instr` file name or serialised HDF5 Instr object')
+       help='Instrument `.instr` file name or serialised HDF5 or JSON Instr object')
     aa('parameters', nargs='*', type=str, default=None)
     aa('-n', '--ncount', type=si_int, default=None, help='Number of neutrons to simulate')
     aa('-m', '--mesh', action='store_true', default=False, help='N-dimensional mesh scan')
