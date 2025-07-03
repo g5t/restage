@@ -135,14 +135,13 @@ def parse_splitrun_precision(unparsed: list[str]) -> dict[str, float]:
         precision[k] = float(v)
     return precision
 
+def args_fixup(args):
+    """Ensure that arguments match expectations
 
-def parse_splitrun(parser):
-    from .range import parse_scan_parameters
-    from mccode_antlr.run.runner import sort_args
-    import sys
-    sys.argv[1:] = sort_args(sys.argv[1:])
-
-    args = parser.parse_args()
+    - MCPL input and output instance parameters should be dictionaries if present.
+    - NCOUNT needs to be separated into (MIN, COUNT, MAX) values, with multiple
+      specifications of either MIN or MAX checked for consistency
+    """
     if args.mcpl_input_parameters is not None:
         args.mcpl_input_parameters = dict(args.mcpl_input_parameters)
     if args.mcpl_output_parameters is not None:
@@ -159,6 +158,16 @@ def parse_splitrun(parser):
         if nmax and not args.nmax:
             args.nmax = nmax
         args.ncount = ncount
+
+    return args
+
+def parse_splitrun(parser):
+    from .range import parse_scan_parameters
+    from mccode_antlr.run.runner import sort_args
+    import sys
+    sys.argv[1:] = sort_args(sys.argv[1:])
+
+    args = args_fixup(parser.parse_args())
 
     parameters = parse_scan_parameters(args.parameters)
     precision = parse_splitrun_precision(args.P)
