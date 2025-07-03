@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
+
 from .tables import SimulationEntry, InstrEntry
 
 def mcpl_parameters_split(s: str) -> list[tuple[str, str]]:
@@ -13,6 +15,8 @@ def si_int(s: str) -> int:
         'Ki': 2 ** 10, 'Mi': 2 ** 20, 'Gi': 2 ** 30, 'Ti': 2 ** 40, 'Pi': 2 ** 50
     }
     def int_mult(x: str, mult: int = 1):
+        if len(x) == 0 and mult > 1:
+            return mult
         return int(x) * mult if x.isnumeric() else int(float(x) * mult)
 
     def do_parse():
@@ -24,7 +28,7 @@ def si_int(s: str) -> int:
         return int_mult(s)
     value = do_parse()
     if value < 0:
-        logger.info('Negative value encountered')
+        raise ValueError(f'Negative {value=} encountered')
     elif value > 2**53:
         logger.info(
             'McStas/McXtrace parse integer inputs as doubles,'
@@ -33,6 +37,17 @@ def si_int(s: str) -> int:
         )
     return value
 
+def si_int_limits(s: str) -> tuple[Optional[int], int, Optional[int]]:
+    low, high = None, None
+    min_seps, max_seps = (']', '-', '}'), ('[', '+', '{')
+    if any(x in s for x in min_seps):
+        low, s = s.split(next(x for x in min_seps if x in s), maxsplit=1)
+        low = si_int(low)
+    if any(x in s for x in max_seps):
+        s, high = s.split(next(x for x in max_seps if x in s), maxsplit=1)
+        high = si_int(high)
+    return low, si_int(s), high
+
 def make_splitrun_parser():
     from argparse import ArgumentParser
     parser = ArgumentParser('splitrun')
@@ -40,7 +55,8 @@ def make_splitrun_parser():
     aa('instrument', type=str, default=None,
        help='Instrument `.instr` file name or serialised HDF5 or JSON Instr object')
     aa('parameters', nargs='*', type=str, default=None)
-    aa('-n', '--ncount', type=si_int, default=None, help='Number of neutrons to simulate')
+    aa('-n', '--ncount', type=si_int_limits, default=None, metavar='[MIN-]COUNT[+MAX]',
+       help='COUNT {number}[kMGTP] target, MIN MAX replace missing --nmin --nmax')
     aa('-m', '--mesh', action='store_true', default=False, help='N-dimensional mesh scan')
     aa('-d', '--dir', type=str, default=None, help='Output directory')
     aa('-s', '--seed', type=int, default=None, help='Random number generator seed')
@@ -49,16 +65,16 @@ def make_splitrun_parser():
        help='Enable gravitation for all trajectories')
     aa('--bufsiz', type=si_int, default=None, help='Monitor_nD list/buffer-size')
     aa('--format', type=str, default=None, help='Output data files using FORMAT')
-    aa('--nmin', type=int, default=None,
-       help='Minimum number of particles to simulate during first instrument simulations')
-    aa('--nmax', type=int, default=None,
-       help='Maximum number of particles to simulate during first instrument simulations')
+    aa('--nmin', type=si_int, default=None, metavar='MIN',
+       help='MIN {number}[kMGTP] rays per first-instrument simulation')
+    aa('--nmax', type=si_int, default=None, metavar='MAX',
+       help='MAX {number}[kMGTP] rays per first-instrument simulation')
     aa('--dryrun', action='store_true', default=False,
        help='Do not run any simulations, just print the commands')
     aa('--parallel', action='store_true', default=False,
-       help='Use MPI multi-process parallelism (primary instrument only at the moment)')
+       help='Use MPI multi-process parallelism')
     aa('--gpu', action='store_true', default=False,
-       help='Use GPU OpenACC parallelism (primary instrument only at the moment)')
+       help='Use GPU OpenACC parallelism')
     aa('--process-count', type=int, default=0,
        help='MPI process count, 0 == System Default')
     # splitrun controlling parameters
@@ -131,6 +147,19 @@ def parse_splitrun(parser):
         args.mcpl_input_parameters = dict(args.mcpl_input_parameters)
     if args.mcpl_output_parameters is not None:
         args.mcpl_output_parameters = dict(args.mcpl_output_parameters)
+
+    if args.ncount is not None:
+        nmin, ncount, nmax = args.ncount
+        if args.nmin and nmin and args.nmin != nmin:
+            raise ValueError(f'Invalid repeated nmin specification: {nmin} != {args.nmin}')
+        if args.nmax and nmax and args.nmax != nmax:
+            raise ValueError(f'Invalid repeated nmax specification: {nmax} != {args.nmax}')
+        if nmin and not args.nmin:
+            args.nmin = nmin
+        if nmax and not args.nmax:
+            args.nmax = nmax
+        args.ncount = ncount
+
     parameters = parse_scan_parameters(args.parameters)
     precision = parse_splitrun_precision(args.P)
     return args, parameters, precision
