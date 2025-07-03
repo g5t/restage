@@ -45,17 +45,28 @@ class SingleTestCase(unittest.TestCase):
         self.assertEqual(args.split_at, 'here')
         self.assertTrue(args.mesh)
 
+    def test_negative_count_throws(self):
+        from restage.splitrun import si_int, si_int_limits
+        with self.assertRaises(ValueError):
+            si_int('-10')
+        with self.assertRaises(ValueError):
+            si_int_limits('10--4+10') # '10--4+10' -> ('10', '-4+10') -> (10, '-4', '10')
+        with self.assertRaises(ValueError):
+            # This is probably a parsing error, but would raise a negative error
+            # in si_int, so is fine. '-10]-2[-1' -> ('','10]-2[-1') -> Error on int('')
+            si_int_limits('-10]-2[-1')
+
     def test_mccode_flags(self):
-        args = self.parser.parse_args(['test.instr', '-s', '123456', '-n', '-1', '-d', '/a/dir', '-t', '-g'])
+        args = self.parser.parse_args(['test.instr', '-s', '123456', '-n', '1', '-d', '/a/dir', '-t', '-g'])
         self.assertEqual(args.seed, 123456)
-        self.assertEqual(args.ncount, -1)
+        self.assertEqual(args.ncount, (None, 1, None))
         self.assertEqual(args.dir, '/a/dir')
         self.assertEqual(args.trace, True)
         self.assertEqual(args.gravitation, True)
 
         args = self.parser.parse_args(['test.instr', '-s=99999', '-n=10000', '-d=/b/dir'])
         self.assertEqual(args.seed, 99999)
-        self.assertEqual(args.ncount, 10000)
+        self.assertEqual(args.ncount, (None, 10000, None))
         self.assertEqual(args.dir, '/b/dir')
         self.assertEqual(args.trace, False)
         self.assertEqual(args.gravitation, False)
@@ -63,7 +74,7 @@ class SingleTestCase(unittest.TestCase):
         args = self.parser.parse_args(['test.instr', '--seed', '888', '--ncount', '4', '--dir', '/c/dir', '--trace',
                                        '--gravitation', '--bufsiz', '1000', '--format', 'NEXUS'])
         self.assertEqual(args.seed, 888)
-        self.assertEqual(args.ncount, 4)
+        self.assertEqual(args.ncount, (None, 4, None))
         self.assertEqual(args.dir, '/c/dir')
         self.assertEqual(args.trace, True)
         self.assertEqual(args.gravitation, True)
@@ -73,12 +84,29 @@ class SingleTestCase(unittest.TestCase):
         args = self.parser.parse_args(['test.instr', '--seed=777', '--ncount=5', '--dir=/d/dir', '--bufsiz=2000',
                                        '--format=RAW'])
         self.assertEqual(args.seed, 777)
-        self.assertEqual(args.ncount, 5)
+        self.assertEqual(args.ncount, (None, 5, None))
         self.assertEqual(args.dir, '/d/dir')
         self.assertEqual(args.trace, False)
         self.assertEqual(args.gravitation, False)
         self.assertEqual(args.bufsiz, 2000)
         self.assertEqual(args.format, 'RAW')
+
+    def test_ncount_varieties(self):
+        args = self.parser.parse_args(['test.instr', '--ncount=5'])
+        self.assertEqual(args.ncount, (None, 5, None))
+        args = self.parser.parse_args(['test.instr', '-n' ,'4k'])
+        self.assertEqual(args.ncount, (None, 4000, None))
+        args = self.parser.parse_args(['test.instr', '-n', '3-2+1'])
+        self.assertEqual(args.ncount, (3, 2, 1))
+        args = self.parser.parse_args(['test.instr', '-n', '1M]1G[1T'])
+        self.assertEqual(args.ncount, (10**6, 10**9, 10**12))
+        args = self.parser.parse_args(['test.instr', '-n', '1Ki}Mi{2Gi'])
+        self.assertEqual(args.ncount, (2**10, 2**20, 2**31))
+        args = self.parser.parse_args(['t.instr', '-n', '1.1M', '--nmin', 'M', '--nmax', '2M'])
+        self.assertEqual(args.ncount, (None, 1100000, None))
+        self.assertEqual(args.nmin, 1000000)
+        self.assertEqual(args.nmax, 2000000)
+
 
     def test_parameters(self):
         from restage.range import MRange, Singular, parameters_to_scan, parse_scan_parameters
