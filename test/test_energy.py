@@ -137,8 +137,11 @@ class BIFROSTEnergyTestCase(unittest.TestCase):
             kv = {'order': order, 'time': time, 'ei': energy}
             translated = bifrost_translate_energy_to_chopper_parameters(kv)
             from_mcstas = mcstas_bifrost_calculation(energy, 0., time)
-            for o, x in zip(parameters(OLD_CHOPPERS), parameters(CHOPPERS)):
-                self.assertAlmostEqual(from_mcstas[o], translated[x])
+            for o, x in zip(OLD_CHOPPERS, CHOPPERS):
+                # chopcal >= 0.4.0 returns a dictionary of Chopper objects
+                chopper = from_mcstas[o]
+                for prop in ('speed', 'phase'):
+                    self.assertAlmostEqual(getattr(chopper, prop), translated[f'{x}{prop}'])
 
 
 if __name__ == '__main__':
