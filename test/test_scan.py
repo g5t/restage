@@ -31,7 +31,7 @@ class RunParserTestCase(unittest.TestCase):
         self.assertEqual(args.R, ['a=15', 'b=16'])
 
     def test_scan_parameters(self):
-        from restage.range import MRange, Singular, parse_scan_parameters
+        from mccode_antlr.run.range import MRange, Singular, parse_scan_parameters
         args = self.parser.parse_args(['test.instr', 'secondary', 'a=1:3', 'b', '4:0.2:6', 'c=3'])
         self.assertEqual(args.parameters, ['a=1:3', 'b', '4:0.2:6', 'c=3'])
         ranges = parse_scan_parameters(args.parameters)
@@ -43,26 +43,38 @@ class RunParserTestCase(unittest.TestCase):
         self.assertRaises(ValueError, parse_scan_parameters, extra_parameters)
 
     def test_scan_points(self):
-        from restage.range import parameters_to_scan, parse_scan_parameters
-        args = self.parser.parse_args(['test.instr', 'secondary', 'a=1:3', 'b', '5:0.5:6', 'c=3'])
+        from mccode_antlr.run.range import parameters_to_scan, parse_scan_parameters
+        args = self.parser.parse_args(['test.instr', 'secondary', 'a=1:3', 'b', '5:0.5:6', 'c=3', 'd=10,11,12'])
         ranges = parse_scan_parameters(args.parameters)
         n_pts, names, points = parameters_to_scan(ranges)
         self.assertEqual(n_pts, 3)
-        self.assertEqual(names, ['a', 'b', 'c'])
-        self.assertEqual(list(points), [(1, 5, 3), (2, 5.5, 3), (3, 6, 3)])
+        self.assertEqual(names, ['a', 'b', 'c', 'd'])
+        self.assertEqual(list(points), [(1, 5, 3, 10), (2, 5.5, 3, 11), (3, 6, 3, 12)])
 
     def test_grid_scan_points(self):
-        from restage.range import parameters_to_scan, parse_scan_parameters
-        grid_parameters = ['a=1:3', 'b=1:4']
+        from mccode_antlr.run.range import parameters_to_scan, parse_scan_parameters
+        grid_parameters = ['a=1:3', 'b=1:4', 'c=50,10']
         grid_ranges = parse_scan_parameters(grid_parameters)
         self.assertRaises(ValueError, parameters_to_scan, grid_ranges)
         n_pts, names, points = parameters_to_scan(grid_ranges, grid=True)
-        self.assertEqual(n_pts, 12)
-        self.assertEqual(names, ['a', 'b'])
+        self.assertEqual(n_pts, 24)
+        self.assertEqual(names, ['a', 'b', 'c'])
         self.assertEqual(list(points), [
-            (1, 1), (1, 2), (1, 3), (1, 4),
-            (2, 1), (2, 2), (2, 3), (2, 4),
-            (3, 1), (3, 2), (3, 3), (3, 4)])
+            (1, 1, 50), (1, 1, 10),
+            (1, 2, 50), (1, 2, 10),
+            (1, 3, 50), (1, 3, 10),
+            (1, 4, 50), (1, 4, 10),
+
+            (2, 1, 50), (2, 1, 10),
+            (2, 2, 50), (2, 2, 10),
+            (2, 3, 50), (2, 3, 10),
+            (2, 4, 50), (2, 4, 10),
+
+            (3, 1, 50), (3, 1, 10),
+            (3, 2, 50), (3, 2, 10),
+            (3, 3, 50), (3, 3, 10),
+            (3, 4, 50), (3, 4, 10),
+        ])
 
 
 if __name__ == '__main__':

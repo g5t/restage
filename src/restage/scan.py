@@ -15,7 +15,7 @@ def make_scan_parser():
 
 
 def parse_scan():
-    from .range import parse_scan_parameters
+    from mccode_antlr.run.range import parse_scan_parameters
     args = make_scan_parser().parse_args()
     parameters = parse_scan_parameters(args.parameters)
     return args, parameters
@@ -29,7 +29,7 @@ def run_point(args, parameters):
 def entrypoint():
     """Entrypoint for the restage_scan command."""
     from .energy import bifrost_translate_energy_to_chopper_parameters
-    from .range import parameters_to_scan
+    from mccode_antlr.run.range import parameters_to_scan
     args, parameters = parse_scan()
     n_points, names, scan = parameters_to_scan(parameters)
     for i, p in enumerate(scan):

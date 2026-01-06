@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .range import Singular
+from mccode_antlr.run.range import Singular
 
 
 def make_run_parser():
@@ -19,7 +19,7 @@ def parse_run_parameters(unparsed: list[str]) -> dict[str, Singular]:
 
     :parameter unparsed: A list of parameters.
     """
-    from .range import parse_list
+    from mccode_antlr.run.range import parse_list
     return parse_list(Singular, unparsed)
 
 

@@ -21,11 +21,11 @@ classifiers = [
     "License :: OSI Approved :: BSD License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 dynamic = ["version"]
 
@@ -43,6 +43,7 @@ legacy_tox_ini = """
     [tox]
     min_version = 4.0
     env_list =
+        py314
         py313
         py312
         py311
@@ -55,6 +56,8 @@ legacy_tox_ini = """
     commands = pytest test
 
     [testenv:type]
-    deps = mypy
+    deps =
+        mypy
+        types-PyYAML
     commands = mypy src
 """
