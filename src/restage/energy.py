@@ -35,9 +35,9 @@ def bifrost_translate_energy_to_chopper_parameters(parameters: dict):
     # names = [a+b for a, b in product(('ps', 'fo', 'bw'), ('1', '2'))]
     chopper_parameter_present = False
     for name in product(choppers, ('speed', 'phase')):
-        name = ''.join(name)
-        if name not in parameters:
-            parameters[name] = 0
+        n = ''.join(name)
+        if n not in parameters:
+            parameters[n] = 0
         else:
             chopper_parameter_present = True
     order = get_and_remove(parameters, 'order', 14)
@@ -51,9 +51,9 @@ def cspec_translate_energy_to_chopper_parameters(parameters: dict):
     choppers = ('bw1', 'bw2', 'bw3', 's', 'p', 'm1', 'm2')
     chopper_parameter_present = False
     for name in product(choppers, ('speed', 'phase')):
-        name = ''.join(name)
-        if name not in parameters:
-            parameters[name] = 0
+        n = ''.join(name)
+        if n not in parameters:
+            parameters[n] = 0
         else:
             chopper_parameter_present = True
     time = get_and_remove(parameters, 'time', 0.004)

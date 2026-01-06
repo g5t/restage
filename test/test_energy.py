@@ -37,7 +37,7 @@ class BIFROSTEnergyTestCase(unittest.TestCase):
             self.assertTrue(name in energy_names)
 
     def test_parameters_to_scan(self):
-        from restage.range import MRange, Singular, parameters_to_scan
+        from mccode_antlr.run.range import MRange, Singular, parameters_to_scan
         order = Singular(14, 1)
         time = MRange(0.0001, 0.002248, 0.0002)
         ei = MRange(1.7, 24.7, 0.5)
@@ -78,7 +78,7 @@ class BIFROSTEnergyTestCase(unittest.TestCase):
     def test_translator(self):
         from restage.energy import energy_to_chopper_translator
         from restage.energy import bifrost_translate_energy_to_chopper_parameters
-        from restage.range import MRange, Singular, parameters_to_scan
+        from mccode_antlr.run.range import MRange, Singular, parameters_to_scan
 
 
         translator = energy_to_chopper_translator(self.instr.name)

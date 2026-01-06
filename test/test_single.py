@@ -109,7 +109,7 @@ class SingleTestCase(unittest.TestCase):
 
 
     def test_parameters(self):
-        from restage.range import MRange, Singular, parameters_to_scan, parse_scan_parameters
+        from mccode_antlr.run.range import MRange, Singular, parameters_to_scan, parse_scan_parameters
         args = self.parser.parse_args(['test.instr', 'a=1.0', 'b=2', 'c=3:5', 'd=blah', 'e=/data', '-m'])
         self.assertEqual(args.parameters, ['a=1.0', 'b=2', 'c=3:5', 'd=blah', 'e=/data'])
         parameters = parse_scan_parameters(args.parameters)
@@ -243,7 +243,7 @@ class SplitRunTestCase(unittest.TestCase):
         # Scanning a1 and a2 with a2=2*a1 should produce approximately the same intensity for all points
         # as long as a1 is between the limits of min_a1 and max_a1
         from restage.splitrun import splitrun
-        from restage.range import parse_scan_parameters
+        from mccode_antlr.run.range import parse_scan_parameters
         # since the source emits a narrow energy bandwidth, we only detect neutrons over a small (a1,a2) range
         scan = parse_scan_parameters([f'a1={self.min_a1}:0.5:{self.max_a1}', f'a2={2*self.min_a1}:{2*self.max_a1}'])
 
@@ -290,7 +290,7 @@ class SplitRunTestCase(unittest.TestCase):
         the output of the tool above.
         """
         from restage.splitrun import splitrun
-        from restage.range import parse_scan_parameters
+        from mccode_antlr.run.range import parse_scan_parameters
         scan = parse_scan_parameters([f'a1={self.min_a1}:0.5:{self.max_a1}', f'a2={2 * self.min_a1}:{2 * self.max_a1}'])
         output = self.dir.joinpath('test_parallel_scan')
         if not output.exists():

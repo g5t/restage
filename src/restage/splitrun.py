@@ -41,11 +41,11 @@ def si_int_limits(s: str) -> tuple[Optional[int], int, Optional[int]]:
     low, high = None, None
     min_seps, max_seps = (']', '-', '}'), ('[', '+', '{')
     if any(x in s for x in min_seps):
-        low, s = s.split(next(x for x in min_seps if x in s), maxsplit=1)
-        low = si_int(low)
+        low_s, s = s.split(next(x for x in min_seps if x in s), maxsplit=1)
+        low = si_int(low_s)
     if any(x in s for x in max_seps):
-        s, high = s.split(next(x for x in max_seps if x in s), maxsplit=1)
-        high = si_int(high)
+        s, high_s = s.split(next(x for x in max_seps if x in s), maxsplit=1)
+        high = si_int(high_s)
     return low, si_int(s), high
 
 def make_splitrun_parser():
@@ -162,7 +162,7 @@ def args_fixup(args):
     return args
 
 def parse_splitrun(parser):
-    from .range import parse_scan_parameters
+    from mccode_antlr.run.range import parse_scan_parameters
     from mccode_antlr.run.runner import sort_args
     import sys
     sys.argv[1:] = sort_args(sys.argv[1:])
@@ -228,14 +228,18 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
         log.error(f'The specified split-at component, {split_at}, does not exist in the instrument file')
     # splitting defines an instrument parameter in both returned instrument, 'mcpl_filename'.
     if mcpl_output_parameters is not None:
-        mcpl_output_parameters = tuple(ComponentParameter(k, Expr.parse(v)) for k, v in mcpl_output_parameters.items())
+        output_parameters = tuple(ComponentParameter(k, Expr.parse(v)) for k, v in mcpl_output_parameters.items())
+    else:
+        output_parameters = None
     if mcpl_input_parameters is not None:
-        mcpl_input_parameters = tuple(ComponentParameter(k, Expr.parse(v)) for k, v in mcpl_input_parameters.items())
+        input_parameters = tuple(ComponentParameter(k, Expr.parse(v)) for k, v in mcpl_input_parameters.items())
+    else:
+        input_parameters = None
     pre, post = instr.mcpl_split(split_at,
                                  output_component=mcpl_output_component,
-                                 output_parameters=mcpl_output_parameters,
+                                 output_parameters=output_parameters,
                                  input_component=mcpl_input_component,
-                                 input_parameters=mcpl_input_parameters,
+                                 input_parameters=input_parameters,
                                  remove_unused_parameters=True
                                  )
     if output_split_instrs:
@@ -270,7 +274,7 @@ def splitrun_pre(instr, parameters, grid, precision: dict[str, float],
     from functools import partial
     from .cache import cache_instr
     from .energy import energy_to_chopper_translator
-    from .range import parameters_to_scan
+    from mccode_antlr.run.range import parameters_to_scan
     # check if this instr is already represented in the module's cache database
     # if not, it is compiled and added to the cache with (hopefully sensible) defaults specified
     entry = cache_instr(instr, mpi=parallel, acc=gpu)
@@ -319,7 +323,7 @@ def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, gri
     from pathlib import Path
     from .cache import cache_instr, cache_get_simulation
     from .energy import energy_to_chopper_translator
-    from .range import parameters_to_scan
+    from mccode_antlr.run.range import parameters_to_scan
     from .instr import collect_parameter_dict
     from .tables import best_simulation_entry_match
     from .emulate import mccode_sim_io, mccode_dat_io, mccode_dat_line
@@ -488,7 +492,9 @@ def repeat_simulation_until(count, runner, args: dict, parameters, work_dir: Pat
     if 'seed' in args and args['seed'] is not None:
         random.seed(args['seed'])
 
-    files, outputs, counts = [], [], []
+    files: list[Path] = []
+    outputs: list[Path] = []
+    counts: list[int] = []
     total_count = 0
     while goal - sum(counts) > 0:
         if len(counts) and counts[-1] <= 0:

@@ -1,5 +1,5 @@
 import unittest
-from restage.range import MRange, Singular
+from mccode_antlr.run.range import MRange, EList, Singular
 
 
 class MRangeTestCase(unittest.TestCase):
@@ -38,6 +38,15 @@ class MRangeTestCase(unittest.TestCase):
             self.assertAlmostEqual(a, b)
         self.assertEqual(46, (10.0-1.0)/0.2 + 1)
         self.assertEqual(len(r), 46)
+
+
+class EListTestCase(unittest.TestCase):
+    def test_one(self):
+        self.assertEqual(list(EList.from_str('1')), [1])
+
+    def test_two(self):
+        self.assertEqual(list(EList.from_str('1,2')), [1, 2])
+
 
 
 class SingularTestCase(unittest.TestCase):

@@ -3,7 +3,7 @@ from pathlib import Path
 def mccode_sim_io(instr, parameters, args: dict, detectors: list[str], file=None, grid: bool = False):
     from datetime import datetime
     from restage import __version__
-    from restage.range import parameters_to_scan
+    from mccode_antlr.run.range import parameters_to_scan
     if file is None:
         from io import StringIO
         file = StringIO()
@@ -44,7 +44,7 @@ def mccode_sim_io(instr, parameters, args: dict, detectors: list[str], file=None
 
 def mccode_dat_io(instr, parameters, args: dict, detectors: list[str], lines: list[str], file=None, grid: bool = False):
     from datetime import datetime
-    from restage.range import parameters_to_scan
+    from mccode_antlr.run.range import parameters_to_scan
     if file is None:
         from io import StringIO
         file = StringIO()
@@ -73,7 +73,6 @@ def mccode_dat_io(instr, parameters, args: dict, detectors: list[str], lines: li
 
 
 def mccode_dat_line(directory, parameters):
-    from math import sqrt
     from pathlib import Path
     from collections import namedtuple
     Detector = namedtuple('Detector', ['name', 'intensity', 'error', 'count', 'norm'])
