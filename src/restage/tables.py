@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from mccode_antlr.common import Value
+from mccode_antlr.common import Expr
 
 
 def uuid():
@@ -25,7 +25,7 @@ COMMON_COLUMNS = ['seed', 'ncount', 'output_path', 'gravitation', 'creation', 'l
 @dataclass
 class SimulationEntry:
     """A class to represent the primary parameters of a simulation which constitute an entry in a specific table"""
-    parameter_values: dict[str, Value]
+    parameter_values: dict[str, Expr]
     seed: int | None = None
     ncount: int | None = None
     output_path: str = field(default_factory=str)
@@ -51,8 +51,8 @@ class SimulationEntry:
     def __post_init__(self):
         from zenlog import log
         for k, v in self.parameter_values.items():
-            if not isinstance(v, Value):
-                self.parameter_values[k] = Value.best(v)
+            if not isinstance(v, Expr):
+                self.parameter_values[k] = Expr.best(v)
 
         for k, v in self.parameter_values.items():
             if v.is_float and k not in self.precision:
