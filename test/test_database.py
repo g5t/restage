@@ -74,7 +74,7 @@ class MyTestCase(unittest.TestCase):
 
     def test_simulation(self):
         from restage import SimulationTableEntry, SimulationEntry
-        from mccode_antlr.common import Value
+        from mccode_antlr.common import Expr
         name = 'super_instr_2'
         parameters = ['par1', 'par2', 'par3', 'par4']
         entry = SimulationTableEntry(parameters=parameters, name=name)
@@ -90,7 +90,7 @@ class MyTestCase(unittest.TestCase):
         entry = res[0]
 
         simulation_pars = {'par1': 1.1, 'par2': 2.2, 'par3': 3.3, 'par4': 4.4}
-        simulation_pars = {k: Value.best(v) for k, v in simulation_pars.items()}
+        simulation_pars = {k: Expr.best(v) for k, v in simulation_pars.items()}
         # we did the 'same' simulation three times, but with different seeds and ncounts
         first_simulation = SimulationEntry(parameter_values=simulation_pars)
         self.db.insert_simulation(entry, first_simulation)

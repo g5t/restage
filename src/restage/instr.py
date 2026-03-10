@@ -34,25 +34,25 @@ def collect_parameter_dict(instr: Instr, kwargs: dict, strict: bool = True) -> d
     :param strict: if True, raises an error if a parameter is specified in kwargs that is not in instr
     :return: dict of parameters from instr and kwargs
     """
-    from mccode_antlr.common.expression import Value
+    from mccode_antlr.common.expression import Expr
     parameters = {p.name: p.value for p in instr.parameters}
     for k, v in parameters.items():
+        if not isinstance(v, Expr):
+            raise ValueError(f"Parameter {k} is not a valid parameter name")
         if not v.is_singular:
             raise ValueError(f"Parameter {k} is not singular, and cannot be set")
         if v.is_op:
             raise ValueError(f"Parameter {k} is an operation, and cannot be set")
-        if not isinstance(v.first, Value):
-            raise ValueError(f"Parameter {k} is not a valid parameter name")
-        parameters[k] = v.first
+        parameters[k] = v
 
     for k, v in kwargs.items():
         if k not in parameters:
             if strict:
                 raise ValueError(f"Parameter {k} is not a valid parameter name. Valid names are: {', '.join(parameters)}")
             continue
-        if not isinstance(v, Value):
+        if not isinstance(v, Expr):
             expected_type = parameters[k].data_type
-            v = Value(v, expected_type)
+            v = Expr(v, expected_type)
         parameters[k] = v
 
     return parameters
