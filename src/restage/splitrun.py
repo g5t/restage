@@ -221,6 +221,7 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
     from zenlog import log
     from mccode_antlr.common import ComponentParameter, Expr
     from .energy import get_energy_parameter_names
+    from .cache import cache_instr
     if split_at is None:
         split_at = 'mcpl_split'
 
@@ -256,28 +257,27 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
         # in the primary instrument
         pre_parameters.update({k: v for k, v in parameters.items() if k in energy_parameter_names})
 
-    pre_entry = splitrun_pre(pre, pre_parameters, grid, precision, **runtime_arguments,
-                             minimum_particle_count=minimum_particle_count,
-                             maximum_particle_count=maximum_particle_count,
-                             dry_run=dry_run, parallel=parallel, gpu=gpu, process_count=process_count)
+    # Populate the cache now to avoid delayed compilation failures
+    pre_entry, post_entry = [cache_instr(x, mpi=parallel, acc=gpu) for x in (pre, post)]
 
-    splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, grid, precision,
+    splitrun_pre(pre_entry, pre, pre_parameters, grid, precision, **runtime_arguments,
+                 minimum_particle_count=minimum_particle_count,
+                 maximum_particle_count=maximum_particle_count,
+                 dry_run=dry_run, parallel=parallel, gpu=gpu, process_count=process_count)
+
+    splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_parameters, grid, precision,
                       dry_run=dry_run, parallel=parallel, gpu=gpu, process_count=process_count,
                       callback=callback, callback_arguments=callback_arguments, **runtime_arguments)
 
 
-def splitrun_pre(instr, parameters, grid, precision: dict[str, float],
-                 minimum_particle_count=None, maximum_particle_count=None, dry_run=False,
-                 parallel=False, gpu=False, process_count=0,
+def splitrun_pre(entry, instr, parameters, grid, precision: dict[str, float],
+                 minimum_particle_count=None, maximum_particle_count=None,
+                 dry_run=False, process_count=0,
                  **runtime_arguments):
 
     from functools import partial
-    from .cache import cache_instr
     from .energy import energy_to_chopper_translator
     from mccode_antlr.run.range import parameters_to_scan
-    # check if this instr is already represented in the module's cache database
-    # if not, it is compiled and added to the cache with (hopefully sensible) defaults specified
-    entry = cache_instr(instr, mpi=parallel, acc=gpu)
     # get the function with converts energy parameters to chopper parameters:
     translate = energy_to_chopper_translator(instr.name)
     # determine the scan in the user-defined parameters!
@@ -285,8 +285,9 @@ def splitrun_pre(instr, parameters, grid, precision: dict[str, float],
     args = regular_mccode_runtime_dict(runtime_arguments)
     sit_kw = {'seed': args.get('seed'), 'ncount': args.get('ncount'), 'gravitation': args.get('gravitation', False)}
 
-    step = partial(_pre_step, instr, entry, names, precision, translate, sit_kw, minimum_particle_count,
-                   maximum_particle_count, dry_run, process_count)
+    step = partial(_pre_step, instr, entry, names, precision, translate, sit_kw,
+                   minimum_particle_count, maximum_particle_count,
+                   dry_run, process_count)
 
     # this does not work due to the sqlite database being locked by the parallel processes
     # from joblib import Parallel, delayed
@@ -297,7 +298,6 @@ def splitrun_pre(instr, parameters, grid, precision: dict[str, float],
     if n_pts == 0:
         # If the parameters are empty, we still need to run the simulation once:
         step([])
-    return entry
 
 
 def _pre_step(instr, entry, names, precision, translate, kw, min_pc, max_pc, dry_run, process_count, values):
@@ -316,18 +316,18 @@ def _pre_step(instr, entry, names, precision, translate, kw, min_pc, max_pc, dry
     return cache_get_simulation(entry, sim)
 
 
-def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, grid, precision: dict[str, float],
-                      summary=True, dry_run=False, callback=None, callback_arguments: dict[str, str] | None = None,
-                      parallel=False, gpu=False, process_count=0,
-                      **runtime_arguments):
+def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_parameters,
+                      grid, precision: dict[str, float], summary=True, dry_run=False,
+                      callback=None, callback_arguments: dict[str, str] | None = None,
+                      process_count=0, **runtime_arguments):
     from pathlib import Path
-    from .cache import cache_instr, cache_get_simulation
+    from .cache import cache_get_simulation
     from .energy import energy_to_chopper_translator
     from mccode_antlr.run.range import parameters_to_scan
     from .instr import collect_parameter_dict
     from .tables import best_simulation_entry_match
     from .emulate import mccode_sim_io, mccode_dat_io, mccode_dat_line
-    instr_entry = cache_instr(post, mpi=parallel, acc=gpu)
+
     args = regular_mccode_runtime_dict(runtime_arguments)
     sit_kw = {'seed': args.get('seed'), 'ncount': args.get('ncount'), 'gravitation': args.get('gravitation', False)}
     # recombine the parameters to ensure the 'correct' scan is performed
@@ -368,7 +368,7 @@ def splitrun_combined(pre_entry, pre, post, pre_parameters, post_parameters, gri
         # TODO Use the following line instead of the one after it when McCode is fixed to use zero-padded folder names
         # # runtime_arguments['dir'] = args["dir"].joinpath(str(number).zfill(n_zeros))
         runtime_arguments['dir'] = args['dir'].joinpath(str(number))
-        do_secondary_simulation(sim_entry, instr_entry, secondary_pars, runtime_arguments, dry_run=dry_run, process_count=process_count)
+        do_secondary_simulation(sim_entry, post_entry, secondary_pars, runtime_arguments, dry_run=dry_run, process_count=process_count)
         if summary and not dry_run:
             # the data file has *all* **scanned** parameters recorded for each step:
             detectors, line = mccode_dat_line(runtime_arguments['dir'], {k: v for k,v in zip(names, values)})
