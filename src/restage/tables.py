@@ -19,6 +19,18 @@ def str_hash(string):
     return sha3_256(string.encode('utf-8')).hexdigest()
 
 
+def instr_json_hash(instr) -> str:
+    """Return a stable, process-independent sha3-256 hex digest of an ``Instr`` object.
+
+    Uses ``mccode_antlr.io.json.to_json`` to serialise the instrument to bytes, then
+    hashes those bytes.  Unlike Python's built-in ``hash(instr)``, this digest is
+    identical across process invocations regardless of ``PYTHONHASHSEED``.
+    """
+    from hashlib import sha3_256
+    from mccode_antlr.io.json import to_json
+    return sha3_256(to_json(instr)).hexdigest()
+
+
 COMMON_COLUMNS = ['seed', 'ncount', 'output_path', 'gravitation', 'creation', 'last_access']
 
 
@@ -319,8 +331,19 @@ class NexusStructureEntry:
 
 @dataclass
 class InstrEntry:
-    """A class to represent the instrument file and its compiled binary when stored as an entry in a table"""
-    file_contents: str
+    """A class to represent the instrument and its compiled binary when stored as an entry in a table.
+
+    The instrument is identified by ``instr_hash``, a sha3-256 digest of the JSON
+    serialisation (via ``mccode_antlr.io.json.to_json``) of the
+    ``mccode_antlr.instr.Instr`` object.  This hash is stable across Python processes
+    unlike ``hash(instr)`` which is subject to PYTHONHASHSEED randomisation.
+
+    The full JSON serialisation is written to ``json_path`` on the filesystem alongside
+    the compiled binary rather than stored in the database (a real instrument can be
+    ~1.5 MB of JSON, which would bloat the DB significantly).
+    """
+    instr_hash: str
+    json_path: str
     mpi: bool
     acc: bool
     binary_path: str
@@ -328,42 +351,62 @@ class InstrEntry:
     id: str = field(default_factory=uuid)
     creation: float = field(default_factory=utc_timestamp)
     last_access: float = field(default_factory=utc_timestamp)
-    file_hash: str = field(default_factory=str)
+
+    @classmethod
+    def from_instr(cls, instr, mpi: bool = False, acc: bool = False,
+                   binary_path: str = '', json_path: str = '', mccode_version: str = '') -> 'InstrEntry':
+        """Construct an ``InstrEntry`` from an ``mccode_antlr.instr.Instr`` object."""
+        return cls(instr_hash=instr_json_hash(instr), json_path=json_path, mpi=mpi, acc=acc,
+                   binary_path=binary_path, mccode_version=mccode_version)
 
     @classmethod
     def from_query_result(cls, values):
-        fid, file_hash, file_contents, mpi, acc, binary_path, mccode_version, creation, last_access = values
-        return cls(file_contents, mpi != 0, acc != 0, binary_path, mccode_version, fid, creation, last_access, file_hash)
+        fid, instr_hash, json_path, mpi, acc, binary_path, mccode_version, creation, last_access = values
+        return cls(instr_hash, json_path, mpi != 0, acc != 0, binary_path, mccode_version,
+                   fid, creation, last_access)
 
     def __post_init__(self):
         if len(self.mccode_version) == 0:
             from mccode_antlr import __version__
             self.mccode_version = __version__
-        if len(self.file_hash) == 0:
-            self.file_hash = str_hash(self.file_contents)
+
+    def load_instr(self):
+        """Reconstruct the ``Instr`` object from the stored JSON file.
+
+        Returns ``None`` if ``json_path`` does not exist (e.g. a shared read-only DB
+        whose files live on another machine).
+        """
+        from pathlib import Path
+        from zenlog import log
+        p = Path(self.json_path)
+        if not p.exists():
+            log.warn(f'InstrEntry.load_instr: json_path {p} does not exist; cannot reconstruct Instr')
+            return None
+        from mccode_antlr.io.json import load_json
+        return load_json(p)
 
     @staticmethod
     def columns():
-        return ['id', 'file_hash', 'file_contents', 'mpi', 'acc', 'binary_path', 'mccode_version', 'creation', 'last_access']
+        return ['id', 'instr_hash', 'json_path', 'mpi', 'acc', 'binary_path', 'mccode_version', 'creation', 'last_access']
 
     def values(self):
-        str_values = [f"'{x}'" for x in (self.id, self.file_hash, self.file_contents, self.binary_path, self.mccode_version)]
+        str_values = [f"'{x}'" for x in (self.id, self.instr_hash, self.json_path, self.binary_path, self.mccode_version)]
         int_values = [f'{x}' for x in (self.mpi, self.acc)]
         flt_values = [f'{self.creation}', f'{self.last_access}']
-        # matches id, file_hash, file_contents, mpi, acc, binary_path, mccode_version, creation, last_access order
+        # matches id, instr_hash, json_path, mpi, acc, binary_path, mccode_version, creation, last_access
         return str_values[:3] + int_values + str_values[3:] + flt_values
 
     @classmethod
-    def create_sql_table(cls, table_name: str = 'instr_files'):
+    def create_sql_table(cls, table_name: str = 'instr_file'):
         return f"CREATE TABLE {table_name} ({', '.join(cls.columns())})"
 
-    def insert_sql_table(self, table_name: str = 'instr_files'):
+    def insert_sql_table(self, table_name: str = 'instr_file'):
         return f"INSERT INTO {table_name} ({', '.join(self.columns())}) VALUES ({', '.join(self.values())})"
 
     @staticmethod
-    def query(instr_id: str, table_name: str = 'instr_files'):
-        return f"SELECT * FROM {table_name} WHERE instr_id={instr_id}"
+    def query(instr_id: str, table_name: str = 'instr_file'):
+        return f"SELECT * FROM {table_name} WHERE id='{instr_id}'"
 
     @staticmethod
-    def get_binary_path(instr_id: str, table_name: str = 'instr_files'):
-        return f"SELECT binary_path FROM {table_name} WHERE instr_id={instr_id}"
+    def get_binary_path(instr_id: str, table_name: str = 'instr_file'):
+        return f"SELECT binary_path FROM {table_name} WHERE id='{instr_id}'"

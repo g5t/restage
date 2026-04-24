@@ -118,6 +118,7 @@ def _compile_instr(entry: InstrEntry, instr: Instr, config: dict | None = None,
                    target=None, flavor=None):
     from mccode_antlr import __version__, Flavor
     from mccode_antlr.compiler.c import compile_instrument, CBinaryTarget
+    from mccode_antlr.io.json import save_json
     if config is None:
         config = dict(default_main=True, enable_trace=False, portable=False, include_runtime=True,
                       embed_instrument_file=False, verbose=False)
@@ -129,22 +130,28 @@ def _compile_instr(entry: InstrEntry, instr: Instr, config: dict | None = None,
     output = directory_under_module_data_path('bin')
     source_file = output.joinpath(instr.name).with_suffix('.c')
     binary_path = compile_instrument(instr, target, output, flavor=flavor, config=config, source_file=source_file)
+    json_path = output.joinpath(instr.name).with_suffix('.json')
+    save_json(instr, json_path)
     entry.mccode_version = __version__
     entry.binary_path = str(binary_path)
+    entry.json_path = str(json_path)
     return entry
 
 
-def cache_instr(instr: Instr, mpi: bool = False, acc: bool = False, mccode_version=None, binary_path=None, **kwargs) -> InstrEntry:
-    instr_contents = str(instr)
-    # the query returns a list[InstrTableEntry]
-    query = FILESYSTEM.query_instr_file(search={'file_contents': instr_contents, 'mpi': mpi, 'acc': acc})
+def cache_instr(instr: Instr, mpi: bool = False, acc: bool = False, mccode_version=None, binary_path=None,
+                json_path=None, **kwargs) -> InstrEntry:
+    from .tables import instr_json_hash
+    instr_hash = instr_json_hash(instr)
+    query = FILESYSTEM.query_instr_file(search={'instr_hash': instr_hash, 'mpi': mpi, 'acc': acc})
     if len(query) > 1:
-        raise RuntimeError(f"Multiple entries for {instr_contents} in {FILESYSTEM}")
+        raise RuntimeError(f"Multiple entries for instr_hash={instr_hash} in {FILESYSTEM}")
     elif len(query) == 1:
         return query[0]
 
-    instr_file_entry = InstrEntry(file_contents=instr_contents, mpi=mpi, acc=acc, binary_path=binary_path or '',
-                                  mccode_version=mccode_version or 'NONE')
+    instr_file_entry = InstrEntry.from_instr(instr, mpi=mpi, acc=acc,
+                                             binary_path=binary_path or '',
+                                             json_path=json_path or '',
+                                             mccode_version=mccode_version or '')
     if binary_path is None:
         instr_file_entry = _compile_instr(instr_file_entry, instr, mpi=mpi, acc=acc, **kwargs)
 
@@ -153,9 +160,11 @@ def cache_instr(instr: Instr, mpi: bool = False, acc: bool = False, mccode_versi
 
 
 def cache_get_instr(instr: Instr, mpi: bool = False, acc: bool = False) -> InstrEntry | None:
-    query = FILESYSTEM.query_instr_file(search={'file_contents': str(instr), 'mpi': mpi, 'acc': acc})
+    from .tables import instr_json_hash
+    instr_hash = instr_json_hash(instr)
+    query = FILESYSTEM.query_instr_file(search={'instr_hash': instr_hash, 'mpi': mpi, 'acc': acc})
     if len(query) > 1:
-        raise RuntimeError(f"Multiple entries for {instr} in {FILESYSTEM}")
+        raise RuntimeError(f"Multiple entries for instr_hash={instr_hash} in {FILESYSTEM}")
     elif len(query) == 1:
         return query[0]
     return None

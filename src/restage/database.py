@@ -25,13 +25,31 @@ class Database:
         # self.secondary_simulations_table = secondary_simulations_table or 'secondary_simulation_tables'
         self.verbose = False
 
-        # check if the database file contains the tables:
+        # check if the database file contains the tables with the expected columns:
         for table, tt in ((self.instr_file_table, InstrEntry),
                           (self.nexus_structures_table, NexusStructureEntry),
                           (self.simulations_table, SimulationTableEntry),
                           # (self.secondary_simulations_table, SecondaryInstrSimulationTable)
                           ):
-            if not self.table_exists(table):
+            expected_columns = tt.columns()
+            if self.table_exists(table):
+                actual_columns = self._table_column_names(table)
+                if actual_columns != expected_columns:
+                    if not self.readonly:
+                        from zenlog import log
+                        log.warn(
+                            f'Table {table} in {db_file} has columns {actual_columns} '
+                            f'but expected {expected_columns}; dropping and recreating.'
+                        )
+                        self.cursor.execute(f"DROP TABLE {table}")
+                        self.cursor.execute(tt.create_sql_table(table_name=table))
+                        self.db.commit()
+                    else:
+                        raise ValueError(
+                            f'Table {table} in readonly database {db_file} has outdated schema '
+                            f'(columns {actual_columns}, expected {expected_columns})'
+                        )
+            else:
                 if not self.readonly:
                     self.cursor.execute(tt.create_sql_table(table_name=table))
                     self.db.commit()
@@ -40,6 +58,12 @@ class Database:
 
     def __del__(self):
         self.db.close()
+
+    def _table_column_names(self, table_name: str) -> list[str]:
+        """Return column names for an existing table (no existence check)."""
+        self.cursor.execute(f"SELECT c.name FROM pragma_table_info('{table_name}') c")
+        return [x[0] for x in self.cursor.fetchall()]
+
 
     def announce(self, msg: str):
         if self.verbose:
@@ -66,25 +90,11 @@ class Database:
         return [InstrEntry.from_query_result(x) for x in self.cursor.fetchall()]
 
     def query_instr_file(self, search: dict) -> list[InstrEntry]:
-        from .tables import str_hash
-        contents = None
-        if 'file_contents' in search:
-            # direct file content searches are slow (for large contents, at least)
-            # Each InstrEntry inserts a hash of its contents, which is probably unique,
-            # so pull-back any matches against that and then check full contents below
-            contents = search['file_contents']
-            del search['file_contents']
-            search['file_hash'] = str_hash(contents)
         query = f"SELECT * FROM {self.instr_file_table} WHERE "
         query += ' AND '.join([f"{k}='{v}'" if isinstance(v, str) else f"{k}={v}" for k, v in search.items()])
         self.announce(query)
         self.cursor.execute(query)
-        results = [InstrEntry.from_query_result(x) for x in self.cursor.fetchall()]
-        if contents is not None:
-            # this check is _probably_ redundant, but on the off chance of a hash
-            # collision we can guarantee the returned InstrEntry matches:
-            results = [x for x in results if x.file_contents == contents]
-        return results
+        return [InstrEntry.from_query_result(x) for x in self.cursor.fetchall()]
 
     def all_instr_files(self) -> list[InstrEntry]:
         self.cursor.execute(f"SELECT * FROM {self.instr_file_table}")
@@ -178,8 +188,7 @@ class Database:
 
     def retrieve_column_names(self, table_name: str):
         self.check_table_exists(table_name)
-        self.cursor.execute(f"SELECT c.name FROM pragma_table_info('{table_name}') c")
-        return [x[0] for x in self.cursor.fetchall()]
+        return self._table_column_names(table_name)
 
     def insert_simulation(self, simulation: SimulationTableEntry, parameters: SimulationEntry):
         if len(self.retrieve_simulation_table(simulation.id, update_access_time=False)) == 0:
