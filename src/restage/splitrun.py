@@ -89,6 +89,8 @@ def make_splitrun_parser():
     aa('--mcpl-output-parameters',type=mcpl_parameters_split,
        metavar='out_parameter1:value1,out_parameter2:value2,...')
     aa('-P', action='append', default=[], help='Cache parameter matching precision')
+    aa('--progress', action='store_true', default=False,
+       help='Show a scan progress bar (simulation output is written to sim.log per run)')
 
     # Other McCode runtime arguments exist, but are likely not used during a scan:
     # --no-output-files             Do not write any data files
@@ -204,6 +206,7 @@ def splitrun_args(instr, parameters, precision, args, **kwargs):
              mcpl_output_parameters=args.mcpl_output_parameters,
              mcpl_input_component=args.mcpl_input_component,
              mcpl_input_parameters=args.mcpl_input_parameters,
+             progress=args.progress,
              **kwargs
              )
 
@@ -217,6 +220,7 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
              output_split_instrs=True,
              mcpl_output_component=None, mcpl_output_parameters: dict[str, str] | None = None,
              mcpl_input_component=None, mcpl_input_parameters: dict[str, str] | None = None,
+             progress: bool = False,
              **runtime_arguments):
     from zenlog import log
     from mccode_antlr.common import ComponentParameter, Expr
@@ -263,19 +267,22 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
     splitrun_pre(pre_entry, pre, pre_parameters, grid, precision, **runtime_arguments,
                  minimum_particle_count=minimum_particle_count,
                  maximum_particle_count=maximum_particle_count,
-                 dry_run=dry_run, parallel=parallel, gpu=gpu, process_count=process_count)
+                 dry_run=dry_run, parallel=parallel, gpu=gpu, process_count=process_count,
+                 progress=progress)
 
     splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_parameters, grid, precision,
                       dry_run=dry_run, parallel=parallel, gpu=gpu, process_count=process_count,
-                      callback=callback, callback_arguments=callback_arguments, **runtime_arguments)
+                      callback=callback, callback_arguments=callback_arguments,
+                      progress=progress, **runtime_arguments)
 
 
 def splitrun_pre(entry, instr, parameters, grid, precision: dict[str, float],
                  minimum_particle_count=None, maximum_particle_count=None,
-                 dry_run=False, process_count=0,
+                 dry_run=False, process_count=0, progress: bool = False,
                  **runtime_arguments):
 
     from functools import partial
+    from tqdm.auto import tqdm
     from .energy import energy_to_chopper_translator
     from mccode_antlr.run.range import parameters_to_scan
     # get the function with converts energy parameters to chopper parameters:
@@ -287,20 +294,20 @@ def splitrun_pre(entry, instr, parameters, grid, precision: dict[str, float],
 
     step = partial(_pre_step, instr, entry, names, precision, translate, sit_kw,
                    minimum_particle_count, maximum_particle_count,
-                   dry_run, process_count)
+                   dry_run, process_count, progress)
 
     # this does not work due to the sqlite database being locked by the parallel processes
     # from joblib import Parallel, delayed
     # Parallel(n_jobs=-3)(delayed(step)(values) for values in scan)
 
-    for values in scan:
+    for values in tqdm(scan, desc='Primary', unit='point', disable=not progress):
         step(values)
     if n_pts == 0:
         # If the parameters are empty, we still need to run the simulation once:
         step([])
 
 
-def _pre_step(instr, entry, names, precision, translate, kw, min_pc, max_pc, dry_run, process_count, values):
+def _pre_step(instr, entry, names, precision, translate, kw, min_pc, max_pc, dry_run, process_count, progress, values):
     """The per-step function for the primary instrument simulation. Broken out for parallelization"""
     from .instr import collect_parameter_dict
     from .cache import cache_has_simulation, cache_simulation, cache_get_simulation
@@ -311,16 +318,19 @@ def _pre_step(instr, entry, names, precision, translate, kw, min_pc, max_pc, dry
                                                 minimum_particle_count=min_pc,
                                                 maximum_particle_count=max_pc,
                                                 dry_run=dry_run,
-                                                process_count=process_count)
+                                                process_count=process_count,
+                                                capture_output=progress)
         cache_simulation(entry, sim)
     return cache_get_simulation(entry, sim)
+
 
 
 def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_parameters,
                       grid, precision: dict[str, float], summary=True, dry_run=False,
                       callback=None, callback_arguments: dict[str, str] | None = None,
-                      process_count=0, **runtime_arguments):
+                      process_count=0, progress: bool = False, **runtime_arguments):
     from pathlib import Path
+    from tqdm.auto import tqdm
     from .cache import cache_get_simulation
     from .energy import energy_to_chopper_translator
     from mccode_antlr.run.range import parameters_to_scan
@@ -350,7 +360,7 @@ def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_par
     detectors, dat_lines = [], []
     # get the function that performs the translation (or no-op if the instrument name is unknown)
     translate = energy_to_chopper_translator(post.name)
-    for number, values in enumerate(scan):
+    for number, values in tqdm(enumerate(scan), desc='Scan', total=n_pts, unit='point', disable=not progress):
         # convert, e.g., energy parameters to chopper parameters:
         pars = translate({n: v for n, v in zip(names, values)})
         # parameters for the primary instrument:
@@ -368,7 +378,8 @@ def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_par
         # TODO Use the following line instead of the one after it when McCode is fixed to use zero-padded folder names
         # # runtime_arguments['dir'] = args["dir"].joinpath(str(number).zfill(n_zeros))
         runtime_arguments['dir'] = args['dir'].joinpath(str(number))
-        do_secondary_simulation(sim_entry, post_entry, secondary_pars, runtime_arguments, dry_run=dry_run, process_count=process_count)
+        do_secondary_simulation(sim_entry, post_entry, secondary_pars, runtime_arguments,
+                                dry_run=dry_run, process_count=process_count, capture_output=progress)
         if summary and not dry_run:
             # the data file has *all* **scanned** parameters recorded for each step:
             detectors, line = mccode_dat_line(runtime_arguments['dir'], {k: v for k,v in zip(names, values)})
@@ -400,6 +411,15 @@ def _args_pars_mcpl(args: dict, params: dict, mcpl_filename) -> str:
     return ' '.join((first, second, third))
 
 
+def _args_pars_direct(args: dict, params: dict) -> str:
+    """Combine arguments and parameters into a command-arguments string (no MCPL filename)."""
+    from mccode_antlr.run.runner import mccode_runtime_dict_to_args_list
+    first = ' '.join(mccode_runtime_dict_to_args_list(args))
+    second = ' '.join([f'{k}={v}' for k, v in params.items()])
+    return ' '.join(x for x in (first, second) if x)
+
+
+
 def _clamp(minimum, maximum, value):
     if value < minimum:
         return minimum
@@ -416,6 +436,7 @@ def do_primary_simulation(sit: SimulationEntry,
                           maximum_particle_count: int | None = None,
                           dry_run: bool = False,
                           process_count: int = 0,
+                          capture_output: bool = False,
                           ):
     from zenlog import log
     from pathlib import Path
@@ -451,7 +472,7 @@ def do_primary_simulation(sit: SimulationEntry,
         mcpl_filename = mcpl_filename[:-5]
 
     mcpl_filepath = work_dir.joinpath(mcpl_filename)
-    runner = partial(run_compiled_instrument, binary_at, target, capture=False, dry_run=dry_run)
+    runner = partial(run_compiled_instrument, binary_at, target, capture=capture_output, dry_run=dry_run)
     if dry_run or args.get('ncount') is None:
         if work_dir.exists():
             if any(work_dir.iterdir()):
@@ -461,15 +482,30 @@ def do_primary_simulation(sit: SimulationEntry,
                 work_dir.rmdir()
         # convert the dictionary to a list of arguments, then combine with the parameters
         args_dict['dir'] = work_dir
-        runner(_args_pars_mcpl(args_dict, parameters, mcpl_filepath))
+        _run_and_log(runner, _args_pars_mcpl(args_dict, parameters, mcpl_filepath),
+                     work_dir, capture_output)
     else:
-        repeat_simulation_until(args['ncount'], runner, args_dict, parameters, work_dir, mcpl_filepath, minimum_particle_count, maximum_particle_count)
+        repeat_simulation_until(args['ncount'], runner, args_dict, parameters, work_dir, mcpl_filepath,
+                                minimum_particle_count, maximum_particle_count, capture_output=capture_output)
     return str(work_dir)
+
+
+def _run_and_log(runner, cmd_args: str, work_dir: Path, capture_output: bool) -> None:
+    """Run the simulation; if capture_output, save stdout+stderr to sim.log in work_dir."""
+    result = runner(cmd_args)
+    if capture_output and result is not None:
+        log_path = Path(work_dir) / 'sim.log'
+        with log_path.open('w') as f:
+            if hasattr(result, 'stdout') and result.stdout:
+                f.write(result.stdout if isinstance(result.stdout, str) else result.stdout.decode(errors='replace'))
+            if hasattr(result, 'stderr') and result.stderr:
+                f.write(result.stderr if isinstance(result.stderr, str) else result.stderr.decode(errors='replace'))
 
 
 def repeat_simulation_until(count, runner, args: dict, parameters, work_dir: Path, mcpl_filepath: Path,
                             minimum_particle_count: int | None = None,
-                            maximum_particle_count: int | None = None):
+                            maximum_particle_count: int | None = None,
+                            capture_output: bool = False):
     import random
     from functools import partial
     from zenlog import log
@@ -510,7 +546,8 @@ def repeat_simulation_until(count, runner, args: dict, parameters, work_dir: Pat
         # adjust our guess for how many particles to simulate : how many we need divided by the last transmission
         args['ncount'] = clamp(((goal - sum(counts)) * args['ncount']) // counts[-1] if len(counts) else goal)
         # recycle the intended-output mcpl filename to avoid breaking mcpl file-merging
-        runner(_args_pars_mcpl(args, parameters, mcpl_filepath))
+        _run_and_log(runner, _args_pars_mcpl(args, parameters, mcpl_filepath),
+                     outputs[-1], capture_output)
         counts.append(mcpl_particle_count(mcpl_filepath))
         total_count += args['ncount']
         # rename the outputfile to this run's filename
@@ -522,8 +559,9 @@ def repeat_simulation_until(count, runner, args: dict, parameters, work_dir: Pat
     combine_mccode_sims_in_directories(outputs, work_dir)
 
 
-def do_secondary_simulation(p_sit: SimulationEntry, entry: InstrEntry, pars: dict, args: dict, dry_run: bool = False,
-                            process_count: int = 0):
+def do_secondary_simulation(p_sit: SimulationEntry, entry: InstrEntry, pars: dict, args: dict,
+                            dry_run: bool = False, process_count: int = 0,
+                            capture_output: bool = False):
     from zenlog import log
     from pathlib import Path
     from shutil import copy
@@ -542,14 +580,19 @@ def do_secondary_simulation(p_sit: SimulationEntry, entry: InstrEntry, pars: dic
     mcpl_path = mcpl_real_filename(Path(p_sit.output_path).joinpath(mcpl_filename))
     executable = Path(entry.binary_path)
     target = CBinaryTarget(mpi=entry.mpi, acc=entry.acc, count=process_count, nexus=False)
-    run_compiled_instrument(executable, target, _args_pars_mcpl(args, pars, mcpl_path), capture=False, dry_run=dry_run)
+    work_dir = Path(args['dir'])
+    _run_and_log(
+        lambda cmd: run_compiled_instrument(executable, target, cmd, capture=capture_output, dry_run=dry_run),
+        _args_pars_mcpl(args, pars, mcpl_path),
+        work_dir, capture_output
+    )
 
     if not dry_run:
         # Copy the primary simulation's .dat file to the secondary simulation's directory and combine .sim files?
-        work_dir = Path(args['dir'])
         for dat in Path(p_sit.output_path).glob('*.dat'):
             copy(dat, work_dir.joinpath(dat.name))
         p_sim = Path(p_sit.output_path).joinpath('mccode.sim')
         s_sim = work_dir.joinpath('mccode.sim')
         if p_sim.exists() and s_sim.exists():
             write_combined_mccode_sims([p_sim, s_sim], s_sim)
+
