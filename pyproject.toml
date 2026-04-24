@@ -11,6 +11,7 @@ dependencies = [
     'psutil>=5.9.6',
     'mccode-antlr[hdf5]>=0.20.1',
     'sqlmodel>=0.0.18',
+    'tqdm>=4.0',
 ]
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
@@ -35,6 +36,7 @@ test = ["pytest", "chopcal>=0.4.0"]
 
 [project.scripts]
 splitrun = "restage.splitrun:entrypoint"
+nosplitrun = "restage.nosplitrun:entrypoint"
 restage_bifrost_choppers = "restage.bifrost_choppers:script"
 
 [tool.setuptools_scm]
