@@ -90,6 +90,26 @@ class Database:
                     conn.exec_driver_sql(f'DROP TABLE IF EXISTS "{table_name}"')
             SQLModel.metadata.create_all(self.engine)
 
+    def close(self) -> None:
+        """Dispose the SQLAlchemy engine, releasing all pooled connections.
+
+        Call this (or use the database as a context manager) before deleting
+        the object on Windows, where open file handles prevent ``unlink()``.
+        """
+        self.engine.dispose()
+
+    def __del__(self) -> None:
+        # CPython reference-counting ensures this runs immediately on `del db`,
+        # closing connections before the caller tries to unlink the file.
+        if hasattr(self, 'engine'):
+            self.engine.dispose()
+
+    def __enter__(self) -> 'Database':
+        return self
+
+    def __exit__(self, *_) -> None:
+        self.close()
+
     def _session(self) -> Session:
         return Session(self.engine, expire_on_commit=False)
 
