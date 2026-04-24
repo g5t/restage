@@ -35,18 +35,25 @@ class MyTestCase(unittest.TestCase):
 
     def test_instr_file(self):
         from restage import InstrEntry
-        file_contents = 'fake file contents'
+        from restage.tables import instr_json_hash
+        from mccode_antlr.loader import parse_mcstas_instr
+        raw = 'DEFINE INSTRUMENT fake(double x) TRACE COMPONENT o = Arm() AT (0,0,0) ABSOLUTE END'
+        instr = parse_mcstas_instr(raw)
+        instr_hash = instr_json_hash(instr)
         binary_path = '/not/a/real/binary/path'
+        json_path = '/not/a/real/json/path.json'
         mccode_version = 'version'
         mpi = False
         acc = True
-        instr_file_entry = InstrEntry(file_contents=file_contents, binary_path=binary_path,
-                                      mccode_version=mccode_version, mpi=mpi, acc=acc)
+        instr_file_entry = InstrEntry.from_instr(instr, mpi=mpi, acc=acc,
+                                                  binary_path=binary_path, json_path=json_path,
+                                                  mccode_version=mccode_version)
         self.db.insert_instr_file(instr_file_entry)
         instr_id = instr_file_entry.id
         retrieved = self.db.retrieve_instr_file(instr_id=instr_id)
-        self._check_return(retrieved, InstrEntry, {'id': instr_id, 'file_contents': file_contents,
-                                                   'binary_path': binary_path, 'mccode_version': mccode_version,
+        self._check_return(retrieved, InstrEntry, {'id': instr_id, 'instr_hash': instr_hash,
+                                                   'binary_path': binary_path, 'json_path': json_path,
+                                                   'mccode_version': mccode_version,
                                                    'mpi': mpi, 'acc': acc})
 
     def test_nexus_structure(self):

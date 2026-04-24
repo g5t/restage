@@ -47,18 +47,21 @@ class CacheTestCase(unittest.TestCase):
     def test_simple_instr_file(self):
         from restage import InstrEntry
         from restage.cache import cache_instr
+        from restage.tables import instr_json_hash
         import mccode_antlr
         mccode_version = mccode_antlr.__version__
-        file_contents = str(self.instr)  # ideally this would be contents, but the parsed representation adds things
+        instr_hash = instr_json_hash(self.instr)
         binary_path = '/not/a/real/binary/path'
-        retrieved = cache_instr(self.instr, mccode_version=mccode_version, binary_path=binary_path)
+        json_path = '/not/a/real/json/path.json'
+        retrieved = cache_instr(self.instr, mccode_version=mccode_version, binary_path=binary_path,
+                                json_path=json_path)
         self.assertTrue(isinstance(retrieved, InstrEntry))
-        self._check_attrs(retrieved, {'file_contents': file_contents, 'binary_path': binary_path,
-                                      'mccode_version': mccode_version})
+        self._check_attrs(retrieved, {'instr_hash': instr_hash, 'binary_path': binary_path,
+                                      'mccode_version': mccode_version, 'json_path': json_path})
         from_db = self.db.retrieve_instr_file(retrieved.id)
         self.assertEqual(len(from_db), 1)
-        self._check_attrs(from_db[0], {'file_contents': file_contents, 'binary_path': binary_path,
-                                       'mccode_version': mccode_version})
+        self._check_attrs(from_db[0], {'instr_hash': instr_hash, 'binary_path': binary_path,
+                                       'mccode_version': mccode_version, 'json_path': json_path})
 
     def test_nexus_structure(self):
         pass
