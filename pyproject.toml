@@ -10,6 +10,7 @@ dependencies = [
     'confuse',
     'psutil>=5.9.6',
     'mccode-antlr[hdf5]>=0.20.1',
+    'sqlmodel>=0.0.18',
 ]
 readme = "README.md"
 license = {text = "BSD-3-Clause"}

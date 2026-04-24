@@ -186,7 +186,8 @@ def cache_simulation_table(entry: InstrEntry, row: SimulationEntry) -> Simulatio
             verify_table_parameters(q, row.parameter_values)
         table = query[0]
     else:
-        table = SimulationTableEntry(list(row.parameter_values.keys()), f'pst_{entry.id}', entry.id)
+        table = SimulationTableEntry(parameters=list(row.parameter_values.keys()),
+                                     name=f'pst_{entry.id}', id=entry.id)
         FILESYSTEM.insert_simulation_table(table)
     return table
 
