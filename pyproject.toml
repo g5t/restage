@@ -32,7 +32,7 @@ classifiers = [
 dynamic = ["version"]
 
 [project.optional-dependencies]
-test = ["pytest", "chopcal>=0.4.0"]
+test = ["pytest", "chopcal==0.4.0"]
 
 [project.scripts]
 splitrun = "restage.splitrun:entrypoint"
