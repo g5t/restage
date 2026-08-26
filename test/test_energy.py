@@ -136,12 +136,21 @@ class BIFROSTEnergyTestCase(unittest.TestCase):
 
             kv = {'order': order, 'time': time, 'ei': energy}
             translated = bifrost_translate_energy_to_chopper_parameters(kv)
-            from_mcstas = mcstas_bifrost_calculation(energy, 0., time)
+            from_mcstas = mcstas_bifrost_calculation(energy_min=energy, shaping_time=time)
             for o, x in zip(OLD_CHOPPERS, CHOPPERS):
-                # chopcal >= 0.4.0 returns a dictionary of Chopper objects
+                # chopcal >= 0.5.0 returns a ChopperSet (dict-like) of Chopper objects,
+                # whose .delay (seconds) replaces the old .phase (degrees); convert back
+                # to degrees to compare against restage's own phase calculation
                 chopper = from_mcstas[o]
-                for prop in ('speed', 'phase'):
-                    self.assertAlmostEqual(getattr(chopper, prop), translated[f'{x}{prop}'])
+                expected_speed = translated[f'{x}speed']
+                self.assertAlmostEqual(chopper.speed, expected_speed)
+
+                expected_phase = translated[f'{x}phase']
+                phase = chopper.delay * 360. * abs(chopper.speed)
+                # chopcal >= 0.5.0 also derives its physical constants instead of
+                # tabulating them, so its reference values shifted slightly; allow a
+                # small relative tolerance rather than requiring bit-exact agreement
+                self.assertAlmostEqual(phase, expected_phase, delta=max(1.0, abs(expected_phase) * 1e-3))
 
 
 if __name__ == '__main__':

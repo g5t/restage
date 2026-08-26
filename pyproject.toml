@@ -15,7 +15,7 @@ dependencies = [
 ]
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 authors = [
     { name = "Gregory Tucker", email = "gregory.tucker@ess.eu" },
 ]
@@ -23,7 +23,6 @@ classifiers = [
     "License :: OSI Approved :: BSD License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -32,7 +31,7 @@ classifiers = [
 dynamic = ["version"]
 
 [project.optional-dependencies]
-test = ["pytest", "chopcal==0.4.0"]
+test = ["pytest", "chopcal==0.5.1"]
 
 [project.scripts]
 splitrun = "restage.splitrun:entrypoint"
