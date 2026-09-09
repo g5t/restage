@@ -59,6 +59,8 @@ def nosplitrun(instr, parameters, precision: dict[str, float],
                summary: bool = True,
                callback=None,
                callback_arguments: dict[str, str] | None = None,
+               pre_callback=None,
+               pre_callback_arguments: dict[str, str] | None = None,
                **runtime_arguments):
     """Run the full (unsplit) instrument for each scan point.
 
@@ -79,6 +81,9 @@ def nosplitrun(instr, parameters, precision: dict[str, float],
     :param summary: Write ``mccode.sim`` / ``mccode.dat`` summary files.
     :param callback: Optional callable invoked after each scan point.
     :param callback_arguments: Mapping from internal arg names to callback kwarg names.
+    :param pre_callback: Optional callable invoked *before* each scan point is simulated.
+    :param pre_callback_arguments: Mapping from internal arg names to pre-callback kwarg
+        names; the same names ``callback_arguments`` accepts.
     :param runtime_arguments: Passed through to the McCode runtime (ncount, seed, dir, …).
     """
     from tqdm.auto import tqdm
@@ -88,7 +93,8 @@ def nosplitrun(instr, parameters, precision: dict[str, float],
     from .energy import energy_to_chopper_translator, get_energy_parameter_names
     from .emulate import mccode_sim_io, mccode_dat_io, mccode_dat_line
     from .instr import collect_parameter_dict
-    from .splitrun import regular_mccode_runtime_dict, _run_and_log, _args_pars_direct
+    from .splitrun import (regular_mccode_runtime_dict, _run_and_log,
+                           _args_pars_direct, _invoke_callback)
 
     # Compile / retrieve from cache
     entry: InstrEntry = cache_instr(instr, mpi=parallel, acc=gpu)
@@ -129,20 +135,16 @@ def nosplitrun(instr, parameters, precision: dict[str, float],
         cmd = _args_pars_direct(run_args, instr_pars)
         runner = lambda c: run_compiled_instrument(binary_at, target, c,
                                                    capture=progress, dry_run=dry_run)
+        _invoke_callback(pre_callback, pre_callback_arguments, names, values, number,
+                         n_pts, pars, work_dir, runtime_arguments)
         _run_and_log(runner, cmd, work_dir, progress)
 
         if summary and not dry_run:
             detectors, line = mccode_dat_line(work_dir, {k: v for k, v in zip(names, values)})
             dat_lines.append(line)
 
-        if callback is not None:
-            cb_args = {}
-            arg_names = names + ['number', 'n_pts', 'pars', 'dir', 'arguments']
-            arg_values = list(values) + [number, n_pts, pars, work_dir, runtime_arguments]
-            for x, v in zip(arg_names, arg_values):
-                if callback_arguments is not None and x in callback_arguments:
-                    cb_args[callback_arguments[x]] = v
-            callback(**cb_args)
+        _invoke_callback(callback, callback_arguments, names, values, number, n_pts,
+                         pars, work_dir, runtime_arguments)
 
     if n_pts == 0:
         # single no-parameter run
