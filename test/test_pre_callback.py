@@ -127,3 +127,55 @@ class HookOrderTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class DroppedParameterWarningTest(unittest.TestCase):
+    """The secondary stage filters silently; say what it dropped.
+
+    Unlike the primary stage, which hands the unfiltered dict to a strict
+    `collect_parameter_dict`, `splitrun_combined` keeps only what a half declares and drops
+    the rest without a word. A chopper setting lost there leaves the disk at its default,
+    which reads as a working scan answering a different question.
+    """
+
+    class _Half:
+        def __init__(self, names):
+            self._names = names
+            self.parameters = [type('P', (), {'name': n})() for n in names]
+
+        def has_parameter(self, name):
+            return name in self._names
+
+    def warnings_from(self, pre, post, pars, warned=None):
+        from unittest.mock import patch
+        from restage.splitrun import _warn_dropped_parameters
+        with patch('zenlog.log.warning') as logged:
+            _warn_dropped_parameters(pre, post, pars, warned if warned is not None else set())
+        return [c.args[0] for c in logged.call_args_list]
+
+    def test_a_dropped_parameter_is_named(self):
+        pre, post = self._Half({'a'}), self._Half({'b'})
+        said = self.warnings_from(pre, post, {'a': 1, 'b': 2, 'c': 3})
+        self.assertEqual(len(said), 1)
+        self.assertIn('c', said[0])
+
+    def test_nothing_is_said_when_every_parameter_lands(self):
+        pre, post = self._Half({'a'}), self._Half({'b'})
+        self.assertEqual(self.warnings_from(pre, post, {'a': 1, 'b': 2}), [])
+
+    def test_a_name_is_reported_once_not_once_per_point(self):
+        """A scan is thousands of points and drops the same name at every one."""
+        pre, post = self._Half({'a'}), self._Half(set())
+        warned = set()
+        first = self.warnings_from(pre, post, {'a': 1, 'c': 3}, warned)
+        second = self.warnings_from(pre, post, {'a': 1, 'c': 3}, warned)
+        self.assertEqual(len(first), 1)
+        self.assertEqual(second, [])
+
+    def test_the_delay_rename_is_diagnosed_rather_than_just_reported(self):
+        pre = self._Half({'psc1speed', 'psc1phase'})
+        post = self._Half(set())
+        said = self.warnings_from(pre, post, {'psc1speed': 14.0, 'psc1delay': 0.005})
+        self.assertEqual(len(said), 1)
+        self.assertIn('psc1delay', said[0])
+        self.assertIn('Rename the instrument', said[0])
