@@ -328,6 +328,30 @@ def _pre_step(instr, entry, names, precision, translate, kw, min_pc, max_pc, dry
 
 
 
+def _warn_dropped_parameters(pre, post, pars: dict, warned: set) -> None:
+    """Report translated parameters that neither instrument half declares.
+
+    Once per name rather than once per point: a scan is thousands of points and the same
+    name is dropped at every one of them. `warned` carries that state across the loop.
+
+    A warning rather than an error, because `mcpl_split(remove_unused_parameters=True)` may
+    legitimately have removed a declared-but-unused parameter from both halves, and that
+    must not fail a scan that works today.
+    """
+    from zenlog import log
+    from .energy import chopper_convention_hint
+    dropped = sorted(k for k in pars
+                     if k not in warned
+                     and not pre.has_parameter(k) and not post.has_parameter(k))
+    if not dropped:
+        return
+    warned.update(dropped)
+    known = [p.name for p in pre.parameters] + [p.name for p in post.parameters]
+    hint = chopper_convention_hint(known, pars)
+    log.warning(f"Computed parameter(s) {', '.join(dropped)} are declared by neither half of "
+                f"the split instrument and will not be set." + (f' {hint}' if hint else ''))
+
+
 def _invoke_callback(callback, callback_arguments: dict[str, str] | None,
                      names, values, number: int, n_pts: int, pars: dict,
                      out_dir, runtime_arguments: dict) -> None:
@@ -389,6 +413,7 @@ def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_par
         Path(args['dir']).mkdir(parents=True)
 
     detectors, dat_lines = [], []
+    warned: set = set()
     # get the function that performs the translation (or no-op if the instrument name is unknown)
     translate = energy_to_chopper_translator(post.name)
     for number, values in tqdm(enumerate(scan), desc='Scan', total=n_pts, unit='point', disable=not progress):
@@ -398,6 +423,11 @@ def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_par
         primary_pars = {k: v for k, v in pars.items() if pre.has_parameter(k)}
         # parameters for the secondary instrument:
         secondary_pars = {k: v for k, v in pars.items() if post.has_parameter(k)}
+        # Anything neither half declares is about to be dropped. Unlike the primary stage,
+        # which hands the unfiltered dict to a strict `collect_parameter_dict`, this filter
+        # is silent -- so a translated chopper setting could go missing and leave the disk
+        # at its default, which reads as a working scan that answers a different question.
+        _warn_dropped_parameters(pre, post, pars, warned)
         # use the parameters for the primary instrument to construct a (partial) simulation entry for matching
         primary_table_parameters = collect_parameter_dict(pre, primary_pars, strict=True)
         primary_sent = SimulationEntry(primary_table_parameters, precision=precision, **sit_kw)

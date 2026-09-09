@@ -31,7 +31,10 @@ classifiers = [
 dynamic = ["version"]
 
 [project.optional-dependencies]
-test = ["pytest", "chopcal==0.5.1"]
+# chopcal is the oracle for the chopper arithmetic, not a component: test/test_energy.py
+# and test/test_constants.py assert restage agrees with it to the last bit. Unpinned on
+# purpose -- a chopcal that changes a constant *should* turn this suite red.
+test = ["pytest", "chopcal>=0.5.1"]
 
 [project.scripts]
 splitrun = "restage.splitrun:entrypoint"

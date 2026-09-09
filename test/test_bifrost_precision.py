@@ -10,26 +10,25 @@ precision dict is supplied.  The old behaviour used ``value / 100`` (1 %).
 Two parameter dimensions are exercised:
 
 * **Minimum incident energy** — 2.00 to 20.00 meV in 0.01 meV steps (1 800
-  adjacent pairs).  All phases change by 0.025–0.29 % per step: detectable
+  adjacent pairs).  All delays change by 0.025–0.29 % per step: detectable
   at 0.01 % but *not* at 1 %.
 
 * **Pulse-shaping chopper opening time** — 0.10 to 3.00 ms in 0.01 ms steps
-  (290 adjacent pairs).  PS phases change by 0.043–0.91 % per step; below
-  ~2.41 ms the chopper speeds are constant so the PS phases alone carry the
+  (290 adjacent pairs).  PS delays change by 0.043–0.91 % per step; below
+  ~2.41 ms the chopper speeds are constant so the PS delays alone carry the
   distinction.  At 2.41 ms / 2.60 ms / 2.82 ms the frequency order is
   stepped down, causing a large speed jump that is detectable at any
   precision.  With 1 % tolerance, only pairs in the constant-speed region
   (t < 2.41 ms) are mistakenly treated as cache hits.
 
-Frame-overlap (fo1/fo2) and bandwidth (bw1/bw2) chopper phases depend only
+Frame-overlap (fo1/fo2) and bandwidth (bw1/bw2) chopper delays depend only
 on energy, not on opening time, so they contribute to energy-sweep
 distinction but not to time-sweep distinction.
 """
 from __future__ import annotations
 
-import io
-import contextlib
 import unittest
+import warnings
 
 
 # ---------------------------------------------------------------------------
@@ -45,9 +44,15 @@ _FIXED_ENERGY = 5.0   # meV — used for time sweep
 
 
 def _calc(order: int, time: float, energy: float) -> dict[str, float]:
-    """Compute chopper settings, suppressing the 'order reduced' print."""
+    """Compute chopper settings, ignoring any 'order reduced' warning.
+
+    The time sweep deliberately crosses the reduction thresholds, so the warning is expected
+    rather than a problem. It used to be a `print` that had to be redirected; a warning can
+    simply be filtered.
+    """
     from restage.bifrost_choppers import calculate
-    with contextlib.redirect_stdout(io.StringIO()):
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
         return calculate(order, time, energy, _NAMES)
 
 
@@ -84,7 +89,7 @@ class BifrostEnergyPrecisionTestCase(unittest.TestCase):
     def test_all_adjacent_energies_distinct_default_precision(self):
         """0.01 % precision distinguishes all 1 800 adjacent 0.01 meV steps.
 
-        All chopper phases change by at least 0.025 % per step, which exceeds
+        All chopper delays change by at least 0.025 % per step, which exceeds
         the abs(value / 10 000) tolerance for each parameter.
         """
         for i in range(len(self.settings) - 1):
@@ -100,7 +105,7 @@ class BifrostEnergyPrecisionTestCase(unittest.TestCase):
     def test_all_adjacent_energies_indistinct_one_percent_precision(self):
         """1 % precision fails to distinguish *any* adjacent 0.01 meV step.
 
-        All chopper phases change by less than 1 % per step, so every
+        All chopper delays change by less than 1 % per step, so every
         adjacent energy pair is a false cache hit under the old tolerance.
         """
         for i in range(len(self.settings) - 1):
@@ -139,7 +144,7 @@ class BifrostTimePrecisionTestCase(unittest.TestCase):
     def test_all_adjacent_times_distinct_default_precision(self):
         """0.01 % precision distinguishes all 290 adjacent 0.01 ms steps.
 
-        Below 2.41 ms PS phases change by ≥ 0.043 % per step; above that
+        Below 2.41 ms PS delays change by ≥ 0.043 % per step; above that
         threshold the chopper frequency order is stepped down, causing a
         large speed jump (≥ 7 %) that is trivially distinct.
         """
@@ -157,7 +162,7 @@ class BifrostTimePrecisionTestCase(unittest.TestCase):
         """1 % precision cannot distinguish adjacent 0.01 ms steps below 2.41 ms.
 
         In the constant-speed region (t < 2.41 ms) FO and BW phases do not
-        change with time, and PS phases change by less than 0.1 % per step —
+        change with time, and PS delays change by less than 0.1 % per step —
         well within the 1 % tolerance, giving false cache hits for every pair.
         """
         pairs = self.constant_speed_pairs

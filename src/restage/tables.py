@@ -44,7 +44,7 @@ class SimulationEntry:
 
         for k, v in self.parameter_values.items():
             if v.is_float and k not in self.precision:
-                # Find the best matching precision, e.g., k='ps1speed' would select 'speed' from ('speed', 'phase', ...)
+                # Find the best matching precision, e.g., k='ps1speed' would select 'speed' from ('speed', 'delay', ...)
                 best = [p for p in self.precision.keys() if p in k]
                 if len(best) > 1:
                     log.info(f"SimulationEntry.__post_init__:: Multiple precision matches for {k}: {best}")

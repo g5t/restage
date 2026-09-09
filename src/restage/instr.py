@@ -48,7 +48,11 @@ def collect_parameter_dict(instr: Instr, kwargs: dict, strict: bool = True) -> d
     for k, v in kwargs.items():
         if k not in parameters:
             if strict:
-                raise ValueError(f"Parameter {k} is not a valid parameter name. Valid names are: {', '.join(parameters)}")
+                from .energy import chopper_convention_hint
+                message = (f"Parameter {k} is not a valid parameter name. "
+                           f"Valid names are: {', '.join(parameters)}")
+                hint = chopper_convention_hint(parameters, kwargs)
+                raise ValueError(f'{message}\n{hint}' if hint else message)
             continue
         if not isinstance(v, Expr):
             expected_type = parameters[k].data_type
