@@ -217,6 +217,7 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
              dry_run=False,
              parallel=False, gpu=False, process_count=0,
              callback=None, callback_arguments: dict[str, str] | None = None,
+             pre_callback=None, pre_callback_arguments: dict[str, str] | None = None,
              output_split_instrs=True,
              mcpl_output_component=None, mcpl_output_parameters: dict[str, str] | None = None,
              mcpl_input_component=None, mcpl_input_parameters: dict[str, str] | None = None,
@@ -273,6 +274,8 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
     splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_parameters, grid, precision,
                       dry_run=dry_run, parallel=parallel, gpu=gpu, process_count=process_count,
                       callback=callback, callback_arguments=callback_arguments,
+                      pre_callback=pre_callback,
+                      pre_callback_arguments=pre_callback_arguments,
                       progress=progress, **runtime_arguments)
 
 
@@ -325,9 +328,37 @@ def _pre_step(instr, entry, names, precision, translate, kw, min_pc, max_pc, dry
 
 
 
+def _invoke_callback(callback, callback_arguments: dict[str, str] | None,
+                     names, values, number: int, n_pts: int, pars: dict,
+                     out_dir, runtime_arguments: dict) -> None:
+    """Call one per-point hook, if there is one.
+
+    ``callback_arguments`` is both a filter and a rename: only the internal names it has
+    keys for are passed, under the names it maps them to. A callback registered without
+    one is therefore called with no arguments at all -- deliberately, since a hook that
+    wants nothing is a legitimate thing to register.
+
+    Shared by the pre- and post-point hooks here and by :func:`~restage.nosplitrun`, so
+    that all three offer the same names rather than drifting apart one copy at a time.
+    """
+    if callback is None:
+        return
+    arguments = {}
+    # 'names' _is_ a list already
+    arg_names = names + ['number', 'n_pts', 'pars', 'dir', 'arguments']
+    # 'values' is a tuple, so we need to convert it to a list
+    arg_values = list(values) + [number, n_pts, pars, out_dir, runtime_arguments]
+    for x, v in zip(arg_names, arg_values):
+        if callback_arguments is not None and x in callback_arguments:
+            arguments[callback_arguments[x]] = v
+    callback(**arguments)
+
+
 def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_parameters,
                       grid, precision: dict[str, float], summary=True, dry_run=False,
                       callback=None, callback_arguments: dict[str, str] | None = None,
+                      pre_callback=None,
+                      pre_callback_arguments: dict[str, str] | None = None,
                       process_count=0, progress: bool = False, **runtime_arguments):
     from pathlib import Path
     from tqdm.auto import tqdm
@@ -378,22 +409,19 @@ def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_par
         # TODO Use the following line instead of the one after it when McCode is fixed to use zero-padded folder names
         # # runtime_arguments['dir'] = args["dir"].joinpath(str(number).zfill(n_zeros))
         runtime_arguments['dir'] = args['dir'].joinpath(str(number))
+        # Before the point is simulated, not after: a hook that sets the world up for this
+        # point -- control-system values a live data acquisition will record while the rays
+        # are traced -- has to run while there is still a point to set up for.
+        _invoke_callback(pre_callback, pre_callback_arguments, names, values, number,
+                         n_pts, pars, runtime_arguments['dir'], runtime_arguments)
         do_secondary_simulation(sim_entry, post_entry, secondary_pars, runtime_arguments,
                                 dry_run=dry_run, process_count=process_count, capture_output=progress)
         if summary and not dry_run:
             # the data file has *all* **scanned** parameters recorded for each step:
             detectors, line = mccode_dat_line(runtime_arguments['dir'], {k: v for k,v in zip(names, values)})
             dat_lines.append(line)
-        if callback is not None:
-            arguments = {}
-            # 'names' _is_ a list already
-            arg_names = names + ['number', 'n_pts', 'pars', 'dir', 'arguments']
-            # 'values' is a tuple, so we need to convert it to a list
-            arg_values = list(values) + [number, n_pts, pars, runtime_arguments['dir'], runtime_arguments]
-            for x, v in zip(arg_names, arg_values):
-                if callback_arguments is not None and x in callback_arguments:
-                    arguments[callback_arguments[x]] = v
-            callback(**arguments)
+        _invoke_callback(callback, callback_arguments, names, values, number, n_pts,
+                         pars, runtime_arguments['dir'], runtime_arguments)
 
     if summary and not dry_run:
         with args['dir'].joinpath('mccode.sim').open('w') as f:
