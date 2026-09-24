@@ -129,7 +129,18 @@ def _compile_instr(entry: InstrEntry, instr: Instr, config: dict | None = None,
 
     output = directory_under_module_data_path('bin')
     source_file = output.joinpath(instr.name).with_suffix('.c')
-    binary_path = compile_instrument(instr, target, output, flavor=flavor, config=config, source_file=source_file)
+    try:
+        binary_path = compile_instrument(instr, target, output, flavor=flavor, config=config,
+                                         source_file=source_file)
+    except RuntimeError as error:
+        if 'not found in registries' not in str(error):
+            raise
+        from .instr import SEARCH_ADVICE
+        names = ', '.join(r.name for r in instr.registries)
+        raise RuntimeError(
+            f'{error}. restage compiles {instr.name} from the registries it carries ({names}); '
+            f'a component an .instr file found through SEARCH is not among them, because '
+            f'mccode-antlr does not keep SEARCH paths. {SEARCH_ADVICE}') from error
     json_path = output.joinpath(instr.name).with_suffix('.json')
     save_json(instr, json_path)
     entry.mccode_version = __version__
