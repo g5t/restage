@@ -35,6 +35,9 @@ dynamic = ["version"]
 # and test/test_constants.py assert restage agrees with it to the last bit. Unpinned on
 # purpose -- a chopcal that changes a constant *should* turn this suite red.
 test = ["pytest", "chopcal>=0.5.1"]
+# Combining mcstas-readout-master collector files across passes and scan points: h5py
+# reads and writes them, mcstas_readout's append/concatenate define how they combine.
+collectors = ["h5py>=3.0", "mcstas-readout-master>=0.6.0"]
 
 [project.scripts]
 splitrun = "restage.splitrun:entrypoint"
