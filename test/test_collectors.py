@@ -26,12 +26,17 @@ BM0_DESCRIPTION = 'uint8_t ring; uint8_t FEN; double time; double weight; uint8_
 
 
 def write_collector(path: Path, group: str, times, parameters: dict, normalization=100,
-                    detector='DetectorType::CBM0'):
-    """A single-point collector file holding one BM0 group with records at `times`."""
+                    detector='DetectorType::CBM0', revision=None):
+    """A single-point collector file holding one BM0 group with records at `times`.
+
+    Stamped as this libreadout build would stamp it, unless `revision` says otherwise.
+    """
     dtype = np.dtype(BM0)
     with h5py.File(path, 'w') as file:
         for key, value in library_identity().items():
             file.attrs[key] = value
+        if revision is not None:
+            file.attrs['revision'] = revision
         g = file.create_group(group)
         g.attrs['detector'] = detector
         g.attrs['type'] = 'Readouts'
@@ -163,6 +168,19 @@ class AssemblePrimaryGroupsTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             assemble_collector_scan(self.points, self.out)
 
+    def test_a_primary_from_another_build_is_refused(self):
+        """Records laid out, or meant, differently by another build must not be mixed in."""
+        write_collector(self.b / 'run.h5', 'monitor', [0.5, 0.6], {'speed': 28.0}, 50,
+                        revision='another-build')
+        from restage.collectors import assemble_collector_scan
+        with self.assertRaises(RuntimeError) as raised:
+            assemble_collector_scan(self.points, self.out)
+        message = str(raised.exception)
+        self.assertIn('another-build', message)
+        self.assertIn(str(self.a / 'run.h5'), message)
+        self.assertIn(str(self.b / 'run.h5'), message)
+        self.assertFalse(self.out.joinpath('run.h5').exists())
+
     def test_the_library_accepts_the_assembled_file(self):
         readout = library()
         if readout is None:
@@ -252,6 +270,15 @@ class MergePassesTest(unittest.TestCase):
         with h5py.File(path, 'r') as file:
             self.assertEqual(file['monitor/readouts'].shape, (8,))
             np.testing.assert_array_equal(file['monitor/normalizations'][...], [3000])
+
+    def test_a_pass_from_another_build_is_refused(self):
+        from restage.collectors import merge_collector_passes
+        write_collector(self.passes[1] / 'run.h5', 'monitor', [0.1], {'speed': 14.0}, 1000,
+                        revision='another-build')
+        with self.assertRaises(RuntimeError) as raised:
+            merge_collector_passes(self.passes, self.work)
+        self.assertIn('another-build', str(raised.exception))
+        self.assertFalse(self.work.joinpath('run.h5').exists())
 
     def test_a_single_pass_is_copied(self):
         from restage.collectors import merge_collector_passes

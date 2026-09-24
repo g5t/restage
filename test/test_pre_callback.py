@@ -115,6 +115,33 @@ class HookOrderTest(unittest.TestCase):
                                  ('pre', 1), ('run', None), ('post', 1),
                                  ('pre', 2), ('run', None), ('post', 2)])
 
+    def test_a_string_output_directory_is_accepted(self):
+        """`splitrun -d DIR` hands the directory over as a str; each point's is joined on it."""
+        from pathlib import Path
+        from unittest.mock import patch
+        from mccode_antlr.run.range import parse_scan_parameters
+        from restage import splitrun as module
+
+        point_dirs = []
+
+        def simulate(sim_entry, post_entry, pars, runtime_arguments, **kwargs):
+            point_dirs.append(runtime_arguments['dir'])
+
+        instr = _FakeInstr('fake')
+        with (patch.object(module, 'do_secondary_simulation', simulate),
+              patch.object(module, 'SimulationEntry', lambda *a, **k: None),
+              patch('restage.cache.cache_get_simulation', lambda *a: []),
+              patch('restage.tables.best_simulation_entry_match', lambda *a: None),
+              patch('restage.instr.collect_parameter_dict', lambda *a, **k: {}),
+              patch('restage.energy.energy_to_chopper_translator', lambda name: dict)):
+            module.splitrun_combined(
+                None, None, instr, instr, parse_scan_parameters(['a=1:2']), {}, False, {},
+                summary=False, dry_run=True, dir=str(self.output),
+            )
+
+        self.assertEqual(point_dirs, [self.output / '0', self.output / '1'])
+        self.assertTrue(self.output.is_dir())
+
     def setUp(self):
         from tempfile import TemporaryDirectory
         from pathlib import Path
