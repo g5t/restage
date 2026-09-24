@@ -413,6 +413,8 @@ def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_par
         Path(args['dir']).mkdir(parents=True)
 
     detectors, dat_lines = [], []
+    # each point's secondary output and the primary it used, for the collector files
+    collector_points = []
     warned: set = set()
     # get the function that performs the translation (or no-op if the instrument name is unknown)
     translate = energy_to_chopper_translator(post.name)
@@ -446,6 +448,8 @@ def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_par
                          n_pts, pars, runtime_arguments['dir'], runtime_arguments)
         do_secondary_simulation(sim_entry, post_entry, secondary_pars, runtime_arguments,
                                 dry_run=dry_run, process_count=process_count, capture_output=progress)
+        if not dry_run:
+            collector_points.append((runtime_arguments['dir'], Path(sim_entry.output_path)))
         if summary and not dry_run:
             # the data file has *all* **scanned** parameters recorded for each step:
             detectors, line = mccode_dat_line(runtime_arguments['dir'], {k: v for k,v in zip(names, values)})
@@ -453,11 +457,39 @@ def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_par
         _invoke_callback(callback, callback_arguments, names, values, number, n_pts,
                          pars, runtime_arguments['dir'], runtime_arguments)
 
+    if collector_points:
+        _assemble_collectors(collector_points, args['dir'])
+
     if summary and not dry_run:
         with args['dir'].joinpath('mccode.sim').open('w') as f:
             mccode_sim_io(post, parameters, args, detectors, file=f, grid=grid)
         with args['dir'].joinpath('mccode.dat').open('w') as f:
             mccode_dat_io(post, parameters, args, detectors, dat_lines, file=f, grid=grid)
+
+
+def _assemble_collectors(points, out_dir) -> None:
+    """Build the scan's collector files, reporting rather than raising on failure.
+
+    The simulations are done and cached by now; a problem combining their collector files
+    must not lose the scan's other output.
+    """
+    from zenlog import log
+    from .collectors import assemble_collector_scan
+    try:
+        for path in assemble_collector_scan(points, out_dir):
+            log.info(f'Assembled collector file {path}')
+    except Exception as error:
+        log.error(f'Collector files were not assembled: {error}')
+
+
+def _merge_collector_passes(pass_dirs, work_dir) -> None:
+    """Combine the primary passes' collector files, reporting rather than raising."""
+    from zenlog import log
+    from .collectors import merge_collector_passes
+    try:
+        merge_collector_passes(pass_dirs, work_dir)
+    except Exception as error:
+        log.error(f'Collector files were not merged across primary passes: {error}')
 
 
 def _args_pars_mcpl(args: dict, params: dict, mcpl_filename) -> str:
@@ -615,6 +647,7 @@ def repeat_simulation_until(count, runner, args: dict, parameters, work_dir: Pat
     mcpl_merge_files(files, mcpl_filepath)
     combine_mccode_dats_in_directories(outputs, work_dir)
     combine_mccode_sims_in_directories(outputs, work_dir)
+    _merge_collector_passes(outputs, work_dir)
 
 
 def do_secondary_simulation(p_sit: SimulationEntry, entry: InstrEntry, pars: dict, args: dict,

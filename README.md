@@ -99,6 +99,31 @@ parameters as comma-separated `key:value` pairs, e.g.:
 splitrun -n 1M a3=0:179 --mcpl-input-component MCPL_input_once --mcpl-output-parameters weight_mode:1,double_prec:1 instr.h5 
 ```
 
+## Collector files
+Instruments using the `Collector*` components of
+[mcstas-readout-master](https://github.com/mcdotstar/mcstas-readout-master) store
+weighted-ray records in HDF5 files for later replay to Event Formation Units. With the
+optional extra installed,
+
+```bash
+pip install restage[collectors]
+```
+
+`splitrun` combines them across both stages:
+
+- the repeated passes of a first-stage simulation are appended into one file in its
+  cache directory, as its `.dat` files are combined;
+- after the scan, each collector file name becomes one multi-point file in the output
+  directory, holding every point's second-stage groups and the groups of the first-stage
+  simulation that point used.
+
+A first-stage simulation usually serves many scan points, so its records are stored once
+per distinct simulation and each point views them through an HDF5 virtual dataset: a
+180-point scan with one first stage holds one copy of that stage's records, not 180.
+The file is otherwise an ordinary collector file for `readout-replay` and `readout-combine`.
+Without the extra, `splitrun` runs as before and warns that it left collector files
+uncombined.
+
 
 ## Cached data
 ### Default writable cache
