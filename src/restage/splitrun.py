@@ -408,9 +408,11 @@ def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_par
         from datetime import datetime
         instr_name = commonprefix((pre.name, post.name))
         args['dir'] = Path().resolve().joinpath(f'{instr_name}{datetime.now():%Y%m%d_%H%M%S}')
+    # `-d DIR` on the command line arrives as a str, and each point's directory is joined on
+    args['dir'] = Path(args['dir'])
 
-    if not Path(args['dir']).exists():
-        Path(args['dir']).mkdir(parents=True)
+    if not args['dir'].exists():
+        args['dir'].mkdir(parents=True)
 
     detectors, dat_lines = [], []
     # each point's secondary output and the primary it used, for the collector files
