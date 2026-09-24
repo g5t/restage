@@ -34,6 +34,10 @@ from pathlib import Path
 
 #: Root attribute value libreadout writes into every collector file.
 COLLECTOR_PROGRAM = 'libreadout'
+#: Root attributes identifying the libreadout build that wrote a file. The library refuses
+#: to combine files whose stamps differ, since a record layout or its meaning may have
+#: changed between builds; restage's own assembly step holds files to the same rule.
+BUILD_ATTRIBUTES = ('version', 'revision')
 #: Where a collector group keeps the records its virtual ``readouts`` is assembled from.
 STORED_READOUTS = 'stored_readouts'
 #: Parameters the split itself adds to both halves. They say where restage kept the
@@ -68,6 +72,32 @@ def _is_collector_file(path: Path) -> bool:
     if isinstance(program, bytes):
         program = program.decode()
     return program == COLLECTOR_PROGRAM
+
+
+def _text(value):
+    return value.decode() if isinstance(value, bytes) else value
+
+
+def _build(path: Path) -> tuple:
+    """The (version, revision) libreadout stamped on a file."""
+    with _h5py().File(path, 'r') as file:
+        return tuple(_text(file.attrs.get(name)) for name in BUILD_ATTRIBUTES)
+
+
+def _require_one_build(paths) -> None:
+    """Refuse to combine files written by different libreadout builds, naming them.
+
+    The library's append and concatenate refuse such files too, but report it only on
+    stderr; and the primaries' groups are added by restage, which the library never sees.
+    """
+    builds = {}
+    for path in paths:
+        builds.setdefault(_build(path), path)
+    if len(builds) > 1:
+        described = '; '.join(f'{path} (version {version}, revision {revision})'
+                              for (version, revision), path in builds.items())
+        raise RuntimeError('Collector files were written by different libreadout builds '
+                           f'and cannot be combined: {described}')
 
 
 def collector_files(directory: Path) -> dict[str, Path]:
@@ -123,8 +153,9 @@ def merge_collector_passes(pass_dirs: list[Path], work_dir: Path) -> list[Path]:
         if not all(name in files for files in per_pass):
             raise RuntimeError(f'Collector file {name} is missing from some primary passes')
         output = Path(work_dir).joinpath(name)
-        _combine_or_copy(_readout().append_collector_files, output,
-                         [files[name] for files in per_pass])
+        inputs = [files[name] for files in per_pass]
+        _require_one_build(inputs)
+        _combine_or_copy(_readout().append_collector_files, output, inputs)
         merged.append(output)
     return merged
 
@@ -152,11 +183,13 @@ def assemble_collector_scan(points: list[tuple[Path, Path]], out_dir: Path) -> l
         if output.exists():
             raise RuntimeError(f'Refusing to overwrite {output}')
         in_points = [files.get(name) for files in secondary]
+        sources = [primary[p].get(name) for _, p in points]
+        # before anything is written, so a refusal leaves no partial file behind
+        _require_one_build({p for p in in_points + sources if p is not None})
         if all(in_points):
             _combine_or_copy(_readout().concatenate_collector_files, output, in_points)
         elif any(in_points):
             raise RuntimeError(f'Collector file {name} is missing from some scan points')
-        sources = [primary[p].get(name) for _, p in points]
         if any(sources):
             if not all(sources):
                 raise RuntimeError(f'Collector file {name} is missing from some primaries')
@@ -180,8 +213,7 @@ def _drop_split_parameters(output: Path) -> None:
 def _groups(file) -> dict:
     """The collector groups of an open file, by name."""
     def kind(group):
-        value = group.attrs.get('type')
-        return value.decode() if isinstance(value, bytes) else value
+        return _text(group.attrs.get('type'))
     h5py = _h5py()
     return {name: obj for name, obj in file.items()
             if isinstance(obj, h5py.Group) and kind(obj) == 'Readouts'}
