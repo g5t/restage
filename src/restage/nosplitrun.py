@@ -90,7 +90,8 @@ def nosplitrun(instr, parameters, precision: dict[str, float],
     from mccode_antlr.compiler.c import run_compiled_instrument, CBinaryTarget
     from mccode_antlr.run.range import parameters_to_scan
     from .cache import cache_instr
-    from .energy import energy_to_chopper_translator, get_energy_parameter_names
+    from .energy import (energy_to_chopper_translator, get_energy_parameter_names,
+                         declared_parameter_names)
     from .emulate import mccode_sim_io, mccode_dat_io, mccode_dat_line
     from .instr import collect_parameter_dict
     from .splitrun import (regular_mccode_runtime_dict, _run_and_log,
@@ -103,7 +104,7 @@ def nosplitrun(instr, parameters, precision: dict[str, float],
     sit_kw = {'seed': args.get('seed'), 'ncount': args.get('ncount'), 'gravitation': args.get('gravitation', False)}
 
     # Energy → chopper translation (no-op for unknown instruments)
-    translate = energy_to_chopper_translator(instr.name)
+    translate = energy_to_chopper_translator(instr.name, declared_parameter_names(instr))
     energy_parameter_names = get_energy_parameter_names(instr.name)
 
     n_pts, names, scan = parameters_to_scan(parameters, grid=grid)
