@@ -286,10 +286,11 @@ def splitrun_pre(entry, instr, parameters, grid, precision: dict[str, float],
 
     from functools import partial
     from tqdm.auto import tqdm
-    from .energy import energy_to_chopper_translator
+    from .energy import energy_to_chopper_translator, declared_parameter_names
     from mccode_antlr.run.range import parameters_to_scan
-    # get the function with converts energy parameters to chopper parameters:
-    translate = energy_to_chopper_translator(instr.name)
+    # get the function with converts energy parameters to chopper parameters, in the
+    # names and units this instrument declares its chopper knobs in:
+    translate = energy_to_chopper_translator(instr.name, declared_parameter_names(instr))
     # determine the scan in the user-defined parameters!
     n_pts, names, scan = parameters_to_scan(parameters, grid=grid)
     args = regular_mccode_runtime_dict(runtime_arguments)
@@ -387,7 +388,7 @@ def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_par
     from pathlib import Path
     from tqdm.auto import tqdm
     from .cache import cache_get_simulation
-    from .energy import energy_to_chopper_translator
+    from .energy import energy_to_chopper_translator, declared_parameter_names
     from mccode_antlr.run.range import parameters_to_scan
     from .instr import collect_parameter_dict
     from .tables import best_simulation_entry_match
@@ -419,7 +420,8 @@ def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_par
     collector_points = []
     warned: set = set()
     # get the function that performs the translation (or no-op if the instrument name is unknown)
-    translate = energy_to_chopper_translator(post.name)
+    # The choppers are in the primary, so both halves' parameters decide the knob names.
+    translate = energy_to_chopper_translator(post.name, declared_parameter_names(pre, post))
     for number, values in tqdm(enumerate(scan), desc='Scan', total=n_pts, unit='point', disable=not progress):
         # convert, e.g., energy parameters to chopper parameters:
         pars = translate({n: v for n, v in zip(names, values)})

@@ -81,8 +81,12 @@ class BIFROSTEnergyTestCase(unittest.TestCase):
         from mccode_antlr.run.range import MRange, Singular, parameters_to_scan
 
 
-        translator = energy_to_chopper_translator(self.instr.name)
-        self.assertEqual(translator, bifrost_translate_energy_to_chopper_parameters)
+        from restage.energy import LEGACY_KNOBS, declared_parameter_names
+        translator = energy_to_chopper_translator(self.instr.name,
+                                                  declared_parameter_names(self.instr))
+        self.assertIs(translator.func, bifrost_translate_energy_to_chopper_parameters)
+        # declared `{name}speed`/`{name}delay`, if not all of them
+        self.assertIs(translator.keywords['knobs'], LEGACY_KNOBS)
 
         order = Singular(14,  1)
         time = MRange(0.0001, 0.002248, 0.0002)
@@ -223,3 +227,82 @@ class ChopperConventionHintTestCase(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ESSKnobsTestCase(unittest.TestCase):
+    """niess 0.8 names a disk's knobs for the ESS logs they are published as.
+
+    ``{name}_rotation_speed`` in Hz and ``{name}_delay`` in ns -- the chopper's TotDly --
+    so the number a run sets is the number its NeXus file records. The calculation stays in
+    Hz and s; only the handover changes.
+    """
+    ESS = tuple(f'{c}{k}' for c in CHOPPERS for k in ('_rotation_speed', '_delay'))
+    LEGACY = tuple(f'{c}{k}' for c in CHOPPERS for k in ('speed', 'delay'))
+    POINT = dict(order=14, time=0.0005, ei=5.0)
+
+    def translate(self, declared):
+        from restage.energy import energy_to_chopper_translator
+        return energy_to_chopper_translator('bifrost', declared)(dict(self.POINT))
+
+    def test_an_instrument_declaring_the_ess_names_gets_them(self):
+        translated = self.translate(self.ESS)
+        self.assertEqual(sorted(translated), sorted(self.ESS))
+
+    def test_the_speed_is_unchanged_and_the_delay_is_in_nanoseconds(self):
+        ess, legacy = self.translate(self.ESS), self.translate(self.LEGACY)
+        for chopper in CHOPPERS:
+            self.assertEqual(ess[f'{chopper}_rotation_speed'], legacy[f'{chopper}speed'])
+            self.assertAlmostEqual(ess[f'{chopper}_delay'], legacy[f'{chopper}delay'] * 1e9,
+                                   delta=1e-6)
+        # a real delay, not zero, so the scaling is actually exercised
+        self.assertGreater(abs(ess['bandwidth_chopper_1_delay']), 1e6)
+
+    def test_nothing_declared_means_the_names_restage_always_set(self):
+        from restage.energy import energy_to_chopper_translator
+        translated = energy_to_chopper_translator('bifrost')(dict(self.POINT))
+        self.assertEqual(sorted(translated), sorted(self.LEGACY))
+
+    def test_a_disk_left_out_does_not_change_the_convention(self):
+        declared = [n for n in self.ESS if not n.startswith('frame_overlap_chopper_2')]
+        translated = self.translate(declared)
+        self.assertIn('frame_overlap_chopper_1_delay', translated)
+        self.assertNotIn('frame_overlap_chopper_1delay', translated)
+
+    def test_a_split_instrument_is_judged_on_both_halves(self):
+        """The discs are all in the primary, so the secondary alone declares none of them."""
+        from types import SimpleNamespace
+        from restage.energy import declared_parameter_names, chopper_knobs, ESS_KNOBS
+        from restage.energy import BIFROST_CHOPPERS
+        param = lambda n: SimpleNamespace(name=n)
+        pre = SimpleNamespace(parameters=[param(n) for n in self.ESS])
+        post = SimpleNamespace(parameters=[param('sample_rotation')])
+        self.assertIs(chopper_knobs(BIFROST_CHOPPERS, declared_parameter_names(pre, post)),
+                      ESS_KNOBS)
+
+    def test_explicit_settings_are_kept_under_the_declared_names(self):
+        """No energy given: whatever the caller set stays, and only the rest is zeroed."""
+        from restage.energy import energy_to_chopper_translator
+        translate = energy_to_chopper_translator('bifrost', self.ESS)
+        translated = translate({'bandwidth_chopper_1_delay': 1.5e7})
+        self.assertEqual(translated['bandwidth_chopper_1_delay'], 1.5e7)
+        self.assertEqual(translated['bandwidth_chopper_2_delay'], 0)
+        self.assertNotIn('bandwidth_chopper_1delay', translated)
+
+
+class ESSRenameHintTestCase(unittest.TestCase):
+    """Legacy names sent to an ESS-named instrument, or the reverse, are diagnosed."""
+    ESS = ESSKnobsTestCase.ESS
+    LEGACY = ESSKnobsTestCase.LEGACY
+
+    def test_legacy_names_against_an_ess_instrument(self):
+        from restage.energy import chopper_convention_hint
+        hint = chopper_convention_hint(self.ESS, self.LEGACY)
+        self.assertIsNotNone(hint)
+        self.assertIn("'bandwidth_chopper_1_rotation_speed'", hint)
+        self.assertIn('niess', hint)
+
+    def test_ess_names_against_a_legacy_instrument_mention_the_unit(self):
+        from restage.energy import chopper_convention_hint
+        hint = chopper_convention_hint(self.LEGACY, [n for n in self.ESS if n.endswith('_delay')])
+        self.assertIsNotNone(hint)
+        self.assertIn('nanoseconds', hint)

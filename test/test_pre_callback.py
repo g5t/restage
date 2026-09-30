@@ -68,6 +68,7 @@ class _FakeInstr:
     """Enough of an Instr for `splitrun_combined` to partition parameters."""
     def __init__(self, name):
         self.name = name
+        self.parameters = ()
 
     def has_parameter(self, name):
         return True
@@ -102,7 +103,7 @@ class HookOrderTest(unittest.TestCase):
               patch('restage.cache.cache_get_simulation', lambda *a: []),
               patch('restage.tables.best_simulation_entry_match', lambda *a: None),
               patch('restage.instr.collect_parameter_dict', lambda *a, **k: {}),
-              patch('restage.energy.energy_to_chopper_translator', lambda name: dict)):
+              patch('restage.energy.energy_to_chopper_translator', lambda name, declared=None: dict)):
             module.splitrun_combined(
                 None, None, instr, instr, parameters, {}, False, {},
                 summary=False, dry_run=True,
@@ -133,7 +134,7 @@ class HookOrderTest(unittest.TestCase):
               patch('restage.cache.cache_get_simulation', lambda *a: []),
               patch('restage.tables.best_simulation_entry_match', lambda *a: None),
               patch('restage.instr.collect_parameter_dict', lambda *a, **k: {}),
-              patch('restage.energy.energy_to_chopper_translator', lambda name: dict)):
+              patch('restage.energy.energy_to_chopper_translator', lambda name, declared=None: dict)):
             module.splitrun_combined(
                 None, None, instr, instr, parse_scan_parameters(['a=1:2']), {}, False, {},
                 summary=False, dry_run=True, dir=str(self.output),
