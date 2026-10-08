@@ -166,16 +166,17 @@ def assemble_collector_scan(points: list[tuple[Path, Path]], out_dir: Path) -> l
     `points` holds, in scan order, each point's secondary output directory and the output
     directory of the primary simulation it used. The secondary files are concatenated by
     the library; the primaries' groups are then added once per distinct primary, behind a
-    virtual ``readouts`` -- see the module docstring.
+    virtual ``readouts`` -- see the module docstring. A scan run unsplit has no primaries:
+    every point's primary is None, and its whole-instrument files are only concatenated.
     """
-    points = [(Path(s), Path(p)) for s, p in points]
+    points = [(Path(s), None if p is None else Path(p)) for s, p in points]
     if not points:
         return []
-    directories = {d for pair in points for d in pair}
+    directories = {d for pair in points for d in pair if d is not None}
     if _warn_if_unhandled(directories, 'assembled into a scan file'):
         return []
     secondary = [collector_files(s) for s, _ in points]
-    primary = {p: collector_files(p) for p in {p for _, p in points}}
+    primary = {p: collector_files(p) for _, p in points if p is not None}
     names = sorted(set().union(*secondary, *primary.values()))
     assembled = []
     for name in names:
@@ -183,7 +184,7 @@ def assemble_collector_scan(points: list[tuple[Path, Path]], out_dir: Path) -> l
         if output.exists():
             raise RuntimeError(f'Refusing to overwrite {output}')
         in_points = [files.get(name) for files in secondary]
-        sources = [primary[p].get(name) for _, p in points]
+        sources = [None if p is None else primary[p].get(name) for _, p in points]
         # before anything is written, so a refusal leaves no partial file behind
         _require_one_build({p for p in in_points + sources if p is not None})
         if all(in_points):

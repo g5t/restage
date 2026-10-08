@@ -236,6 +236,16 @@ class AssembleWithSecondaryTest(unittest.TestCase):
             self.assertNotIn('mcpl_filename', file['parameters'])
             self.assertIn('a3', file['parameters'])
 
+    def test_an_unsplit_scan_is_only_concatenated(self):
+        """A scan run unsplit has no primary; each point's file holds the whole instrument."""
+        from restage.collectors import assemble_collector_scan
+        unsplit = [(point, None) for point, _ in self.points]
+        (path,) = assemble_collector_scan(unsplit, self.out)
+        self.assertEqual(self.readout.validate_collector_file(path), 3)
+        with h5py.File(path, 'r') as file:
+            np.testing.assert_array_equal(file['detector/cues'][...], [1, 3, 6])
+            self.assertNotIn('monitor', file)
+
     def test_a_point_without_its_file_is_an_error(self):
         from restage.collectors import assemble_collector_scan
         self.points[1][0].joinpath('run.h5').unlink()
