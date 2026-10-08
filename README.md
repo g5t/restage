@@ -45,6 +45,16 @@ Command line flags and parameters are mostly the same as used by `mcrun` with a 
 of additions to support `splitrun`'s enhanced behavior.
 One optional argument, `split-at`, is added; it should be the name of
 an `Arm` component inside the instrument file and defaults to `mcpl_split`.
+
+`split-at` may also name several candidates, separated by commas. Splitting pays only when
+scan points share a primary, so `splitrun` takes the latest candidate where the scan needs
+fewer primaries than it has points, and runs the scan unsplit when no candidate does.
+Only the instrument's author knows where a split is safe -- an MCPL file carries none of
+a ray's `USERVARS` -- so `splitrun` chooses among the candidates it is given, and never
+inside a `GROUP` or between Union components and their master.
+Both halves of a split receive the instrument-level `DECLARE`, `INITIALIZE`, `SAVE` and
+`FINAL` blocks, so a scanned parameter mentioned there needs a primary per value.
+`splitrun` refuses such an instrument unless `--allow-block-parameters` is given.
 In contrast to `mcrun`, instrument parameters for `splitrun` are specified as 'MATLAB'-range style keyword arguments.
 A valid range is inclusive of its end points and of the form `start:step:end` or `start:end` (with implicit `step=1`).
 

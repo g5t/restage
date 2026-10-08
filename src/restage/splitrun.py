@@ -79,7 +79,12 @@ def make_splitrun_parser():
        help='MPI process count, 0 == System Default')
     # splitrun controlling parameters
     aa('--split-at', type=str, default='mcpl_split',
-       help='Component at which to split -- DEFAULT: mcpl_split')
+       help='Component at which to split, or several separated by commas to split at the '
+            'latest whose primaries the scan still shares (none shared: run unsplit) '
+            '-- DEFAULT: mcpl_split')
+    aa('--allow-block-parameters', action='store_true', default=False,
+       help='Split even though instrument-level DECLARE/INITIALIZE/SAVE/FINAL mention a '
+            'scanned parameter, which makes every value of it need its own primary')
     aa('--mcpl-output-component', type=str, default=None,
        help='Inserted MCPL file producing component, "MCPL_output" if not provided')
     aa('--mcpl-input-component', type=str, default=None,
@@ -207,6 +212,7 @@ def splitrun_args(instr, parameters, precision, args, **kwargs):
              mcpl_input_component=args.mcpl_input_component,
              mcpl_input_parameters=args.mcpl_input_parameters,
              progress=args.progress,
+             allow_block_parameters=getattr(args, 'allow_block_parameters', False),
              **kwargs
              )
 
@@ -222,16 +228,30 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
              mcpl_output_component=None, mcpl_output_parameters: dict[str, str] | None = None,
              mcpl_input_component=None, mcpl_input_parameters: dict[str, str] | None = None,
              progress: bool = False,
+             allow_block_parameters: bool = False,
              **runtime_arguments):
     from zenlog import log
     from mccode_antlr.common import ComponentParameter, Expr
     from .energy import get_energy_parameter_names
     from .cache import cache_instr
+    from .split_points import choose_split
     if split_at is None:
         split_at = 'mcpl_split'
 
-    if not instr.has_component_named(split_at):
-        log.error(f'The specified split-at component, {split_at}, does not exist in the instrument file')
+    energy_parameter_names = get_energy_parameter_names(instr.name)
+    energy_present = {x for x in energy_parameter_names if x in parameters}
+    chosen = choose_split(instr, split_at, scan_points(instr, parameters, grid),
+                          extra=energy_present, allow_block_parameters=allow_block_parameters)
+    if chosen is None:
+        log.info(f'No split point of {instr.name} lets scan points share a primary; running it unsplit')
+        from .nosplitrun import nosplitrun
+        return nosplitrun(instr, parameters, precision, grid=grid, dry_run=dry_run,
+                          parallel=parallel, gpu=gpu, process_count=process_count,
+                          progress=progress, callback=callback,
+                          callback_arguments=callback_arguments, pre_callback=pre_callback,
+                          pre_callback_arguments=pre_callback_arguments, **runtime_arguments)
+    log.info(f'Splitting {instr.name} at {chosen}')
+    split_at = chosen
     # splitting defines an instrument parameter in both returned instrument, 'mcpl_filename'.
     if mcpl_output_parameters is not None:
         output_parameters = tuple(ComponentParameter(k, Expr.parse(v)) for k, v in mcpl_output_parameters.items())
@@ -256,8 +276,7 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
     pre_parameters = {k: v for k, v in parameters.items() if pre.has_parameter(k)}
     post_parameters = {k: v for k, v in parameters.items() if post.has_parameter(k)}
 
-    energy_parameter_names = get_energy_parameter_names(instr.name)
-    if any(x in parameters for x in energy_parameter_names):
+    if energy_present:
         # these are special parameters which are used to calculate the chopper parameters
         # in the primary instrument
         pre_parameters.update({k: v for k, v in parameters.items() if k in energy_parameter_names})
@@ -277,6 +296,15 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
                       pre_callback=pre_callback,
                       pre_callback_arguments=pre_callback_arguments,
                       progress=progress, **runtime_arguments)
+
+
+def scan_points(instr, parameters, grid) -> list[dict]:
+    """Each scan point's parameter values, as the simulations receive them."""
+    from mccode_antlr.run.range import parameters_to_scan
+    from .energy import energy_to_chopper_translator, declared_parameter_names
+    translate = energy_to_chopper_translator(instr.name, declared_parameter_names(instr))
+    _, names, scan = parameters_to_scan(parameters, grid=grid)
+    return [translate(dict(zip(names, values))) for values in scan]
 
 
 def splitrun_pre(entry, instr, parameters, grid, precision: dict[str, float],

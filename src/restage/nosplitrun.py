@@ -95,7 +95,7 @@ def nosplitrun(instr, parameters, precision: dict[str, float],
     from .emulate import mccode_sim_io, mccode_dat_io, mccode_dat_line
     from .instr import collect_parameter_dict
     from .splitrun import (regular_mccode_runtime_dict, _run_and_log,
-                           _args_pars_direct, _invoke_callback)
+                           _args_pars_direct, _invoke_callback, _assemble_collectors)
 
     # Compile / retrieve from cache
     entry: InstrEntry = cache_instr(instr, mpi=parallel, acc=gpu)
@@ -120,7 +120,7 @@ def nosplitrun(instr, parameters, precision: dict[str, float],
     target = CBinaryTarget(mpi=entry.mpi, acc=entry.acc, count=process_count, nexus=False)
     binary_at = Path(entry.binary_path)
 
-    detectors, dat_lines = [], []
+    detectors, dat_lines, work_dirs = [], [], []
     scan_iter = tqdm(enumerate(scan), desc='nosplitrun', total=n_pts, unit='point', disable=not progress)
     for number, values in scan_iter:
         pars = translate({n: v for n, v in zip(names, values)})
@@ -139,6 +139,7 @@ def nosplitrun(instr, parameters, precision: dict[str, float],
         _invoke_callback(pre_callback, pre_callback_arguments, names, values, number,
                          n_pts, pars, work_dir, runtime_arguments)
         _run_and_log(runner, cmd, work_dir, progress)
+        work_dirs.append(work_dir)
 
         if summary and not dry_run:
             detectors, line = mccode_dat_line(work_dir, {k: v for k, v in zip(names, values)})
@@ -156,9 +157,14 @@ def nosplitrun(instr, parameters, precision: dict[str, float],
         runner = lambda c: run_compiled_instrument(binary_at, target, c,
                                                    capture=progress, dry_run=dry_run)
         _run_and_log(runner, cmd, work_dir, progress)
+        work_dirs.append(work_dir)
         if summary and not dry_run:
             detectors, line = mccode_dat_line(work_dir, {})
             dat_lines.append(line)
+
+    if not dry_run:
+        # one scan file per collector file name, as a split run leaves
+        _assemble_collectors([(d, None) for d in work_dirs], root_dir)
 
     if summary and not dry_run:
         with root_dir.joinpath('mccode.sim').open('w') as f:
