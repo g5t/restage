@@ -141,10 +141,10 @@ def one_generic_energy_to_chopper_parameters(
         time: float, order: int, parameters: dict,
         chopper_parameter_present: bool, knobs: ChopperKnobs = LEGACY_KNOBS,
 ):
-    from loguru import logger
+    from zenlog import log
     if any(x in parameters for x in ('ei', 'wavelength', 'lambda', 'energy', 'e')):
         if chopper_parameter_present:
-            logger.warning('Specified chopper parameter(s) overridden by Ei or wavelength.')
+            log.warning('Specified chopper parameter(s) overridden by Ei or wavelength.')
         ei = get_and_remove(parameters, 'ei', get_and_remove(parameters, 'energy', get_and_remove(parameters, 'e')))
         if ei is None:
             wavelength = get_and_remove(parameters, 'wavelength', get_and_remove(parameters, 'lambda'))
