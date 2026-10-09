@@ -77,6 +77,10 @@ def make_splitrun_parser():
        help='Use GPU OpenACC parallelism')
     aa('--process-count', type=int, default=0,
        help='MPI process count, 0 == System Default')
+    aa('--pools', type=int, default=1, metavar='N',
+       help='Simulate N secondary points at once, each with --process-count processes '
+            '(default: the CPU count shared between the N); for a split scan without '
+            'per-point callbacks')
     # splitrun controlling parameters
     aa('--split-at', type=str, default='mcpl_split',
        help='Component at which to split, or several separated by commas to split at the '
@@ -213,6 +217,7 @@ def splitrun_args(instr, parameters, precision, args, **kwargs):
              mcpl_input_parameters=args.mcpl_input_parameters,
              progress=args.progress,
              allow_block_parameters=getattr(args, 'allow_block_parameters', False),
+             pools=getattr(args, 'pools', 1),
              **kwargs
              )
 
@@ -229,6 +234,7 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
              mcpl_input_component=None, mcpl_input_parameters: dict[str, str] | None = None,
              progress: bool = False,
              allow_block_parameters: bool = False,
+             pools: int = 1,
              **runtime_arguments):
     from zenlog import log
     from mccode_antlr.common import ComponentParameter, Expr
@@ -244,6 +250,8 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
                           extra=energy_present, allow_block_parameters=allow_block_parameters)
     if chosen is None:
         log.info(f'No split point of {instr.name} lets scan points share a primary; running it unsplit')
+        if pools > 1:
+            log.warn(f'--pools {pools} is ignored: it applies to the points of a split scan')
         from .nosplitrun import nosplitrun
         return nosplitrun(instr, parameters, precision, grid=grid, dry_run=dry_run,
                           parallel=parallel, gpu=gpu, process_count=process_count,
@@ -295,7 +303,7 @@ def splitrun(instr, parameters, precision: dict[str, float], split_at=None, grid
                       callback=callback, callback_arguments=callback_arguments,
                       pre_callback=pre_callback,
                       pre_callback_arguments=pre_callback_arguments,
-                      progress=progress, **runtime_arguments)
+                      progress=progress, pools=pools, **runtime_arguments)
 
 
 def scan_points(instr, parameters, grid) -> list[dict]:
@@ -412,7 +420,8 @@ def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_par
                       callback=None, callback_arguments: dict[str, str] | None = None,
                       pre_callback=None,
                       pre_callback_arguments: dict[str, str] | None = None,
-                      process_count=0, progress: bool = False, **runtime_arguments):
+                      process_count=0, progress: bool = False, pools: int = 1,
+                      **runtime_arguments):
     from pathlib import Path
     from tqdm.auto import tqdm
     from .cache import cache_get_simulation
@@ -442,6 +451,16 @@ def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_par
 
     if not args['dir'].exists():
         args['dir'].mkdir(parents=True)
+
+    if pools > 1:
+        if callback is not None or pre_callback is not None:
+            raise ValueError('--pools runs points out of order, so it can not be combined '
+                             'with per-point callbacks')
+        if process_count == 0:
+            from os import cpu_count
+            process_count = max(1, (cpu_count() or 1) // pools)
+    # (point arguments, primary, scanned values) for the pools to simulate after the loop
+    pooled = []
 
     detectors, dat_lines = [], []
     # each point's secondary output and the primary it used, for the collector files
@@ -473,6 +492,10 @@ def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_par
         # TODO Use the following line instead of the one after it when McCode is fixed to use zero-padded folder names
         # # runtime_arguments['dir'] = args["dir"].joinpath(str(number).zfill(n_zeros))
         runtime_arguments['dir'] = args['dir'].joinpath(str(number))
+        if pools > 1:
+            # a copy: the next point changes 'dir' before this one has run
+            pooled.append((dict(runtime_arguments), sim_entry, secondary_pars, values))
+            continue
         # Before the point is simulated, not after: a hook that sets the world up for this
         # point -- control-system values a live data acquisition will record while the rays
         # are traced -- has to run while there is still a point to set up for.
@@ -489,6 +512,15 @@ def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_par
         _invoke_callback(callback, callback_arguments, names, values, number, n_pts,
                          pars, runtime_arguments['dir'], runtime_arguments)
 
+    if pooled:
+        _simulate_pooled(pooled, post_entry, pools, dry_run, process_count, progress)
+        for point_arguments, sim_entry, _, values in pooled:
+            if not dry_run:
+                collector_points.append((point_arguments['dir'], Path(sim_entry.output_path)))
+            if summary and not dry_run:
+                detectors, line = mccode_dat_line(point_arguments['dir'], {k: v for k, v in zip(names, values)})
+                dat_lines.append(line)
+
     if collector_points:
         _assemble_collectors(collector_points, args['dir'])
 
@@ -497,6 +529,38 @@ def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_par
             mccode_sim_io(post, parameters, args, detectors, file=f, grid=grid)
         with args['dir'].joinpath('mccode.dat').open('w') as f:
             mccode_dat_io(post, parameters, args, detectors, dat_lines, file=f, grid=grid)
+
+
+def _simulate_pooled(pooled, post_entry, pools: int, dry_run: bool, process_count: int,
+                     progress: bool) -> None:
+    """Simulate the secondary points ``pooled`` holds, ``pools`` at a time.
+
+    A launch costs seconds that more MPI processes do not shorten -- starting them,
+    reading the input, gathering and writing the output -- so several smaller launches at
+    once beat one big one in turn. Each point's output goes to its own sim.log, since
+    interleaved on the terminal it would be unreadable; a failure still raises with it.
+    Only the simulations run here: the database was read while preparing the points.
+    """
+    from os import environ
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from tqdm.auto import tqdm
+    # Open MPI pins each launch's processes from the first core; concurrent launches
+    # would then share those cores and leave the rest idle.
+    environ.setdefault('OMPI_MCA_hwloc_base_binding_policy', 'none')
+    with ThreadPoolExecutor(max_workers=pools) as executor:
+        futures = [executor.submit(do_secondary_simulation, sim_entry, post_entry, pars,
+                                   point_arguments, dry_run=dry_run,
+                                   process_count=process_count, capture_output=True)
+                   for point_arguments, sim_entry, pars, _ in pooled]
+        try:
+            for future in tqdm(as_completed(futures), desc='Scan', total=len(futures),
+                               unit='point', disable=not progress):
+                future.result()
+        except BaseException:
+            # the points not yet started; those running finish before this re-raises
+            for future in futures:
+                future.cancel()
+            raise
 
 
 def _assemble_collectors(points, out_dir) -> None:
