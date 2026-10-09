@@ -9,7 +9,7 @@ def mcpl_parameters_split(s: str) -> list[tuple[str, str]]:
     return [(k, v) for k, v in [kv.split(':', maxsplit=1) for kv in s.split(',')]]
 
 def si_int(s: str) -> int:
-    from loguru import logger
+    from zenlog import log
     suffix_value = {
         'k': 1000, 'M': 10 ** 6, 'G': 10 ** 9, 'T': 10 ** 12, 'P': 10 ** 15,
         'Ki': 2 ** 10, 'Mi': 2 ** 20, 'Gi': 2 ** 30, 'Ti': 2 ** 40, 'Pi': 2 ** 50
@@ -30,7 +30,7 @@ def si_int(s: str) -> int:
     if value < 0:
         raise ValueError(f'Negative {value=} encountered')
     elif value > 2**53:
-        logger.info(
+        log.info(
             'McStas/McXtrace parse integer inputs as doubles,'
             f' this requested {value=} will not be evaluated precisely'
             ' since it is more than 2^53'
