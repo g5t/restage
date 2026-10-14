@@ -451,6 +451,8 @@ def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_par
 
     if not args['dir'].exists():
         args['dir'].mkdir(parents=True)
+    if not dry_run:
+        _write_manifest(args['dir'], n_pts, names)
 
     if pools > 1:
         if callback is not None or pre_callback is not None:
@@ -505,6 +507,7 @@ def splitrun_combined(pre_entry, post_entry, pre, post, pre_parameters, post_par
                                 dry_run=dry_run, process_count=process_count, capture_output=progress)
         if not dry_run:
             collector_points.append((runtime_arguments['dir'], Path(sim_entry.output_path)))
+            _write_point_collectors(runtime_arguments['dir'], sim_entry.output_path)
         if summary and not dry_run:
             # the data file has *all* **scanned** parameters recorded for each step:
             detectors, line = mccode_dat_line(runtime_arguments['dir'], {k: v for k,v in zip(names, values)})
@@ -548,9 +551,8 @@ def _simulate_pooled(pooled, post_entry, pools: int, dry_run: bool, process_coun
     # would then share those cores and leave the rest idle.
     environ.setdefault('OMPI_MCA_hwloc_base_binding_policy', 'none')
     with ThreadPoolExecutor(max_workers=pools) as executor:
-        futures = [executor.submit(do_secondary_simulation, sim_entry, post_entry, pars,
-                                   point_arguments, dry_run=dry_run,
-                                   process_count=process_count, capture_output=True)
+        futures = [executor.submit(_simulate_point, sim_entry, post_entry, pars,
+                                   point_arguments, dry_run, process_count)
                    for point_arguments, sim_entry, pars, _ in pooled]
         try:
             for future in tqdm(as_completed(futures), desc='Scan', total=len(futures),
@@ -561,6 +563,47 @@ def _simulate_pooled(pooled, post_entry, pools: int, dry_run: bool, process_coun
             for future in futures:
                 future.cancel()
             raise
+
+
+def _simulate_point(sim_entry, post_entry, pars, point_arguments, dry_run: bool,
+                    process_count: int) -> None:
+    """One pooled point: its secondary, then its whole collector files, as soon as it is done."""
+    do_secondary_simulation(sim_entry, post_entry, pars, point_arguments, dry_run=dry_run,
+                            process_count=process_count, capture_output=True)
+    if not dry_run:
+        _write_point_collectors(point_arguments['dir'], sim_entry.output_path)
+
+
+#: Written to a scan's directory before any of its points is simulated.
+MANIFEST = 'points.json'
+
+
+def _write_manifest(out_dir, n_pts: int, names) -> None:
+    """Say how many points the scan has, for a reader following them as they finish.
+
+    Each finished point's whole collector files appear in ``<n>/point``; see
+    `restage.collectors.write_point_collectors`. Renamed into place, so never half-read.
+    """
+    import json
+    from pathlib import Path
+    out = Path(out_dir).joinpath(MANIFEST)
+    partial = out.with_name(f'{MANIFEST}.part')
+    partial.write_text(json.dumps({'points': n_pts, 'parameters': list(names)}))
+    partial.rename(out)
+
+
+def _write_point_collectors(point_dir, primary_dir) -> None:
+    """One point's whole collector files, reporting rather than raising on failure.
+
+    For a reader following the scan, not for the scan itself, which must not be lost to
+    a problem here.
+    """
+    from zenlog import log
+    from .collectors import write_point_collectors
+    try:
+        write_point_collectors(point_dir, primary_dir)
+    except Exception as error:
+        log.error(f'Point {point_dir} collector files were not written: {error}')
 
 
 def _assemble_collectors(points, out_dir) -> None:

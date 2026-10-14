@@ -330,3 +330,76 @@ class WithoutTheExtraTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+@unittest.skipIf(h5py is None, 'h5py is not installed')
+class PointCollectorsTest(unittest.TestCase):
+    """One finished point made whole on its own, for a reader following the scan."""
+
+    def setUp(self):
+        self._tmp = TemporaryDirectory()
+        root = Path(self._tmp.name)
+        self.primary = root / 'primary'
+        self.point = root / 'scan' / '1'
+        self.primary.mkdir()
+        self.point.mkdir(parents=True)
+        write_collector(self.primary / 'run.h5', 'monitor', [0.1, 0.2, 0.3], {'speed': 14.0}, 100)
+        write_collector(self.point / 'run.h5', 'detector', [0.4, 0.5], {'a3': 10.0}, 10)
+        with h5py.File(self.point / 'run.h5', 'a') as file:
+            file['parameters'].create_dataset('mcpl_filename', data=np.array([b'/cache/x.mcpl']))
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def write(self, primary=True):
+        from restage.collectors import write_point_collectors
+        return write_point_collectors(self.point, self.primary if primary else None)
+
+    def test_both_stages_without_copying_the_primary(self):
+        (path,) = self.write()
+        self.assertEqual(path, self.point / 'point' / 'run.h5')
+        self.assertFalse(self.point.joinpath('point.part').exists())
+        with h5py.File(path, 'r') as file:
+            monitor = file['monitor/readouts']
+            self.assertTrue(monitor.is_virtual)
+            self.assertEqual([s.file_name for s in monitor.virtual_sources()],
+                             [str((self.primary / 'run.h5').resolve())])
+            np.testing.assert_allclose(monitor['time'], [0.1, 0.2, 0.3])
+            np.testing.assert_allclose(file['detector/readouts']['time'], [0.4, 0.5])
+            np.testing.assert_array_equal(file['monitor/normalizations'][...], [100])
+            np.testing.assert_allclose(file['parameters/speed'][...], [14])
+            np.testing.assert_allclose(file['parameters/a3'][...], [10])
+            self.assertNotIn('mcpl_filename', file['parameters'])
+        # and the scan assembly still sees only the point's own file
+        from restage.collectors import collector_files
+        self.assertEqual(list(collector_files(self.point)), ['run.h5'])
+
+    def test_a_primary_only_file_is_written_too(self):
+        write_collector(self.primary / 'other.h5', 'psc', [0.7], {'speed': 14.0}, 100)
+        paths = self.write()
+        self.assertEqual([p.name for p in paths], ['other.h5', 'run.h5'])
+        with h5py.File(paths[0], 'r') as file:
+            self.assertEqual(list(file), ['parameters', 'psc'])
+
+    def test_an_unsplit_point_is_linked(self):
+        (path,) = self.write(primary=False)
+        self.assertTrue(path.samefile(self.point / 'run.h5'))
+
+    def test_an_existing_point_directory_is_not_overwritten(self):
+        self.write()
+        with self.assertRaises(RuntimeError):
+            self.write()
+
+    def test_a_primary_from_another_build_is_refused(self):
+        write_collector(self.primary / 'run.h5', 'monitor', [0.1], {'speed': 14.0}, 100,
+                        revision='another')
+        with self.assertRaises(RuntimeError):
+            self.write()
+        self.assertFalse(self.point.joinpath('point').exists())
+
+    def test_the_library_replays_it_as_one_point(self):
+        readout = library()
+        if readout is None:
+            self.skipTest('mcstas_readout is not available')
+        (path,) = self.write()
+        self.assertEqual(readout.validate_collector_file(path), 1)
