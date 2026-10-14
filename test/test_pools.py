@@ -57,7 +57,7 @@ class SimulatePooledTest(unittest.TestCase):
             if point_arguments['dir'] == 0:
                 raise RuntimeError('simulation failed')
 
-        pooled = [({'dir': n}, None, {}, (n,)) for n in range(20)]
+        pooled = [({'dir': n}, mock.Mock(output_path='primary'), {}, (n,)) for n in range(20)]
         with mock.patch.object(splitrun, 'do_secondary_simulation', fake), \
                 mock.patch.object(splitrun, '_write_point_collectors'):
             with self.assertRaises(RuntimeError):
