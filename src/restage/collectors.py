@@ -16,6 +16,10 @@ instrument in two stages, and both leave collector files in places nothing else 
   beam as much as the detectors after it did. `assemble_collector_scan` builds one
   multi-point file per collector file name.
 
+- The scan file waits for the last point. `write_point_collectors` makes each point whole
+  on its own, in ``<point>/point``, as soon as that point is done, so a reader can follow
+  the scan -- replaying the points in order while later ones are still running.
+
 Copying the primary's records into every point would store the same records once per
 point: a 180-point rotation scan served by one primary would hold 180 copies of what is
 already the largest part of the data. Instead each distinct primary's records are stored
@@ -44,6 +48,8 @@ STORED_READOUTS = 'stored_readouts'
 #: intermediate rays, which is nothing a replayed point should publish -- and the path is
 #: into this machine's cache.
 SPLIT_PARAMETERS = ('mcpl_filename',)
+#: The directory, inside a scan point's own, holding that point's whole collector files.
+POINT_DIRECTORY = 'point'
 
 
 def _h5py():
@@ -198,6 +204,84 @@ def assemble_collector_scan(points: list[tuple[Path, Path]], out_dir: Path) -> l
         _drop_split_parameters(output)
         assembled.append(output)
     return assembled
+
+
+def write_point_collectors(point_dir: Path, primary_dir: Path | None) -> list[Path]:
+    """Every collector file of one finished scan point, whole, in ``point_dir/point``.
+
+    The scan file is assembled only once every point is done; these are for whoever wants
+    a point as soon as it is -- to replay the points in order while the rest still run.
+    A split point's own files hold only the secondary's groups, so each is copied and the
+    primary's groups added as virtual datasets onto the primary's file in the cache:
+    nothing of the primary is copied, and HDF5 reads it from there. An unsplit point's
+    files are already whole and are hard-linked.
+
+    The files are written into ``point.part`` and that directory is renamed ``point``
+    when all are in, so a ``point`` directory is only ever complete. A virtual dataset
+    whose source file is gone reads as zeros, without an error: a reader on another
+    machine should check that each ``virtual_sources()`` file exists.
+    """
+    import os
+    from shutil import copyfile, rmtree
+    point_dir = Path(point_dir)
+    primary_dir = None if primary_dir is None else Path(primary_dir)
+    directories = [d for d in (point_dir, primary_dir) if d is not None]
+    if _warn_if_unhandled(directories, f'written whole for point {point_dir}'):
+        return []
+    secondary = collector_files(point_dir)
+    primary = {} if primary_dir is None else collector_files(primary_dir)
+    if not secondary and not primary:
+        return []
+    final, partial = point_dir / POINT_DIRECTORY, point_dir / f'{POINT_DIRECTORY}.part'
+    if final.exists():
+        raise RuntimeError(f'Refusing to overwrite {final}')
+    if partial.exists():
+        rmtree(partial)  # left by an earlier attempt that failed part-way
+    partial.mkdir()
+    for name in sorted(set(secondary) | set(primary)):
+        output = partial / name
+        _require_one_build([p for p in (secondary.get(name), primary.get(name)) if p])
+        if primary_dir is None:
+            os.link(secondary[name], output)
+            continue
+        if name in secondary:
+            copyfile(secondary[name], output)
+        if name in primary:
+            _add_external_primary_groups(output, primary[name].resolve())
+        _drop_split_parameters(output)
+    partial.rename(final)
+    return sorted(final.iterdir())
+
+
+def _add_external_primary_groups(output: Path, source: Path) -> None:
+    """Add `source`'s single-point groups to `output`, reading their records from `source`."""
+    import numpy as np
+    h5py = _h5py()
+    with h5py.File(output, 'a') as out, h5py.File(source, 'r') as src:
+        for key, value in src.attrs.items():
+            if key not in out.attrs:
+                out.attrs[key] = value
+        for name, group in _groups(src).items():
+            if name in out:
+                raise RuntimeError(f'Collector group {name} is in both stages')
+            if group['cues'].shape[0] != 1:
+                raise RuntimeError(f'Primary collector group {group.name} holds '
+                                   f'{group["cues"].shape[0]} points, expected one')
+            records = group['readouts']
+            copy = out.create_group(name)
+            for key, value in group.attrs.items():
+                copy.attrs[key] = value
+            if records.shape[0]:
+                layout = h5py.VirtualLayout(shape=records.shape, dtype=records.dtype)
+                layout[:] = h5py.VirtualSource(str(source), records.name, shape=records.shape)
+                readouts = copy.create_virtual_dataset('readouts', layout)
+            else:  # an empty virtual dataset is not allowed
+                readouts = copy.create_dataset('readouts', shape=(0,), dtype=records.dtype)
+            for key, value in records.attrs.items():
+                readouts.attrs[key] = value
+            for dataset in ('cues', 'weights', 'normalizations'):
+                copy.create_dataset(dataset, data=group[dataset][...])
+        _add_parameters(out, [src], [0], 1)
 
 
 def _drop_split_parameters(output: Path) -> None:

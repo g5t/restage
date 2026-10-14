@@ -24,8 +24,15 @@ class SimulatePooledTest(unittest.TestCase):
                 state['running'] -= 1
                 state['done'].append(point_arguments['dir'])
 
-        pooled = [({'dir': n}, None, {}, (n,)) for n in range(points)]
-        with mock.patch.object(splitrun, 'do_secondary_simulation', fake):
+        def write(point_dir, primary_dir):
+            with lock:
+                state['written'].append((point_dir, primary_dir, point_dir in state['done']))
+
+        state['written'] = []
+        pooled = [({'dir': n}, mock.Mock(output_path=f'primary{n % 2}'), {}, (n,))
+                  for n in range(points)]
+        with mock.patch.object(splitrun, 'do_secondary_simulation', fake), \
+                mock.patch.object(splitrun, '_write_point_collectors', write):
             splitrun._simulate_pooled(pooled, None, pools, False, 2, False)
         return state
 
@@ -34,6 +41,11 @@ class SimulatePooledTest(unittest.TestCase):
         self.assertEqual(sorted(state['done']), list(range(9)))
         self.assertEqual(state['most'], 3)
         self.assertEqual(state['capture'], {True})
+
+    def test_each_point_is_made_whole_once_it_is_simulated(self):
+        state = self.run_pooled(points=6, pools=3)
+        self.assertEqual(sorted(state['written']),
+                         [(n, f'primary{n % 2}', True) for n in range(6)])
 
     def test_a_failure_raises_and_cancels_the_queued_points(self):
         from restage import splitrun
@@ -46,7 +58,8 @@ class SimulatePooledTest(unittest.TestCase):
                 raise RuntimeError('simulation failed')
 
         pooled = [({'dir': n}, None, {}, (n,)) for n in range(20)]
-        with mock.patch.object(splitrun, 'do_secondary_simulation', fake):
+        with mock.patch.object(splitrun, 'do_secondary_simulation', fake), \
+                mock.patch.object(splitrun, '_write_point_collectors'):
             with self.assertRaises(RuntimeError):
                 splitrun._simulate_pooled(pooled, None, 2, False, 2, False)
         # which points had started depends on scheduling, but not all 20

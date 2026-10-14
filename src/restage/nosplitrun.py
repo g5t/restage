@@ -95,7 +95,8 @@ def nosplitrun(instr, parameters, precision: dict[str, float],
     from .emulate import mccode_sim_io, mccode_dat_io, mccode_dat_line
     from .instr import collect_parameter_dict
     from .splitrun import (regular_mccode_runtime_dict, _run_and_log,
-                           _args_pars_direct, _invoke_callback, _assemble_collectors)
+                           _args_pars_direct, _invoke_callback, _assemble_collectors,
+                           _write_manifest, _write_point_collectors)
 
     # Compile / retrieve from cache
     entry: InstrEntry = cache_instr(instr, mpi=parallel, acc=gpu)
@@ -116,6 +117,9 @@ def nosplitrun(instr, parameters, precision: dict[str, float],
     root_dir = Path(args['dir'])
     if not root_dir.exists():
         root_dir.mkdir(parents=True)
+    if not dry_run:
+        # a run without scan parameters is still one point, in 0/
+        _write_manifest(root_dir, max(n_pts, 1), names)
 
     target = CBinaryTarget(mpi=entry.mpi, acc=entry.acc, count=process_count, nexus=False)
     binary_at = Path(entry.binary_path)
@@ -140,6 +144,8 @@ def nosplitrun(instr, parameters, precision: dict[str, float],
                          n_pts, pars, work_dir, runtime_arguments)
         _run_and_log(runner, cmd, work_dir, progress)
         work_dirs.append(work_dir)
+        if not dry_run:
+            _write_point_collectors(work_dir, None)
 
         if summary and not dry_run:
             detectors, line = mccode_dat_line(work_dir, {k: v for k, v in zip(names, values)})
@@ -158,6 +164,8 @@ def nosplitrun(instr, parameters, precision: dict[str, float],
                                                    capture=progress, dry_run=dry_run)
         _run_and_log(runner, cmd, work_dir, progress)
         work_dirs.append(work_dir)
+        if not dry_run:
+            _write_point_collectors(work_dir, None)
         if summary and not dry_run:
             detectors, line = mccode_dat_line(work_dir, {})
             dat_lines.append(line)
