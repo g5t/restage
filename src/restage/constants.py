@@ -63,6 +63,10 @@ BANDWIDTH_DISTANCE = 78.0
 
 #: Opening angle of a pulse-shaping disk, degrees.
 PULSE_SHAPING_ANGLE = 170.0
+#: Opening angles of the frame-overlap and bandwidth disks, degrees.
+FRAME_OVERLAP_1_ANGLE = 38.26
+FRAME_OVERLAP_2_ANGLE = 52.01
+BANDWIDTH_ANGLE = 161.0
 
 #: Degrees in a turn -- a unit conversion, not a measurement.
 DEGREES_PER_TURN = 360.0
