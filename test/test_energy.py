@@ -306,3 +306,70 @@ class ESSRenameHintTestCase(unittest.TestCase):
         hint = chopper_convention_hint(self.LEGACY, [n for n in self.ESS if n.endswith('_delay')])
         self.assertIsNotNone(hint)
         self.assertIn('nanoseconds', hint)
+
+
+class ExperimentDelayKnobsTestCase(unittest.TestCase):
+    """niess 0.12 gives a disk the ESS controller's knobs: ``{name}_experiment_delay`` in ns
+    (ChopDly-S) puts the first opening edge on the beam after the instrument's
+    ``pulse_delay``, and the instrument adds the mechanical delay itself."""
+    DECLARED = tuple(f'{c}{k}' for c in CHOPPERS
+                     for k in ('_rotation_speed', '_experiment_delay', '_mechanical_delay')
+                     ) + ('pulse_delay',)
+    POINT = dict(order=14, time=0.0005, ei=5.0)
+
+    def translate(self, **extra):
+        from restage.energy import energy_to_chopper_translator
+        return energy_to_chopper_translator('bifrost', self.DECLARED)({**self.POINT, **extra})
+
+    def test_an_instrument_declaring_them_gets_them(self):
+        from restage.energy import (BIFROST_CHOPPERS, ESS_EXPERIMENT_KNOBS, chopper_knobs)
+        self.assertIs(chopper_knobs(BIFROST_CHOPPERS, self.DECLARED), ESS_EXPERIMENT_KNOBS)
+        translated = self.translate()
+        self.assertIn('bandwidth_chopper_2_experiment_delay', translated)
+        self.assertNotIn('bandwidth_chopper_2_delay', translated)
+
+    def test_the_first_edge_is_half_an_opening_from_its_middle_and_after_the_pulse_delay(self):
+        """bw1 and bw2 share a middle and turn opposite ways, so their first edges -- the
+        one closing bw1, the one opening bw2 -- are an opening's crossing apart, and a
+        pulse delay moves both together."""
+        from restage.constants import BANDWIDTH_ANGLE
+        plain, pulsed = self.translate(), self.translate(pulse_delay=1e4)
+        bw1, bw2 = (plain[f'bandwidth_chopper_{n}_experiment_delay'] for n in (1, 2))
+        turn = 1e9 / 14     # each is folded into one turn, so compare modulo it
+        self.assertAlmostEqual((bw1 - bw2) % turn, BANDWIDTH_ANGLE / 360 / 14 * 1e9,
+                               delta=1e-3)
+        self.assertAlmostEqual(
+            (plain['bandwidth_chopper_1_experiment_delay']
+             - pulsed['bandwidth_chopper_1_experiment_delay']) % turn, 1e4, delta=1e-3)
+        self.assertEqual(pulsed['pulse_delay'], 1e4)
+
+    def test_every_delay_is_folded_into_one_turn(self):
+        translated = self.translate()
+        for chopper in CHOPPERS:
+            speed = translated[f'{chopper}_rotation_speed']
+            delay = translated[f'{chopper}_experiment_delay']
+            self.assertGreaterEqual(delay, 0.0, chopper)
+            self.assertLess(delay, 1e9 / abs(speed), chopper)
+
+    def test_the_same_numbers_as_chopcal_gives_nicos(self):
+        try:
+            from chopcal.nicos import bifrost
+        except ImportError as error:      # pragma: no cover - chopcal is a test extra
+            self.skipTest(f'chopcal.nicos is not available ({error})')
+        ours = self.translate(pulse_delay=1e4)
+        theirs = bifrost(1e4, energy_min=5.0, shaping_time=0.0005)
+        nicos = dict(zip(CHOPPERS, ('psc1', 'psc2', 'foc1', 'foc2', 'bwc1', 'bwc2')))
+        for chopper, name in nicos.items():
+            self.assertAlmostEqual(ours[f'{chopper}_experiment_delay'],
+                                   theirs[f'{name}_chopper_delay'], delta=1e-3, msg=chopper)
+
+    def test_a_total_delay_name_sent_to_such_an_instrument_is_diagnosed(self):
+        from restage.energy import chopper_convention_hint
+        hint = chopper_convention_hint(self.DECLARED, ['bandwidth_chopper_1_delay'])
+        self.assertIn("'bandwidth_chopper_1_experiment_delay'", hint)
+        self.assertIn('not the same number', hint)
+
+    def test_an_instrument_without_widths_cannot_have_them(self):
+        from restage.energy import ESS_EXPERIMENT_KNOBS
+        with self.assertRaises(ValueError):
+            ESS_EXPERIMENT_KNOBS.settings('bw1', 14.0, 0.05)

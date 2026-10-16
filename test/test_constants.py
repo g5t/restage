@@ -39,7 +39,8 @@ class DerivedConstantTestCase(unittest.TestCase):
         for name in ('SOURCE_DURATION', 'SOURCE_FREQUENCY', 'PULSE_HIGH_FLUX_OFFSET',
                      'INSTRUMENT_LENGTH', 'PULSE_SHAPING_DISTANCE',
                      'FRAME_OVERLAP_1_DISTANCE', 'FRAME_OVERLAP_2_DISTANCE',
-                     'BANDWIDTH_DISTANCE', 'PULSE_SHAPING_ANGLE', 'DEGREES_PER_TURN'):
+                     'BANDWIDTH_DISTANCE', 'PULSE_SHAPING_ANGLE', 'FRAME_OVERLAP_1_ANGLE',
+                     'FRAME_OVERLAP_2_ANGLE', 'BANDWIDTH_ANGLE', 'DEGREES_PER_TURN'):
             self.assertEqual(getattr(constants, name), getattr(self.theirs, name), name)
 
 
