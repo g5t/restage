@@ -132,3 +132,30 @@ class CacheTestCase(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class CompileLeavesInstrumentTestCase(unittest.TestCase):
+    def test_compiling_does_not_change_the_hash(self):
+        """Compiling stores translations on the (shared) component blocks: compiling the
+        instrument itself would make every later instrument using them hash differently."""
+        from pathlib import Path
+        from tempfile import mkdtemp
+        from unittest.mock import patch
+        from mccode_antlr.loader import parse_mcstas_instr
+        from restage import InstrEntry
+        from restage.cache import _compile_instr
+        from restage.tables import instr_json_hash
+
+        instr = parse_mcstas_instr(
+            'DEFINE INSTRUMENT translated_once() TRACE COMPONENT o = Arm() AT (0, 0, 0) ABSOLUTE END')
+        before = instr_json_hash(instr)
+
+        def compile_instrument(compiled, *args, **kwargs):
+            compiled.components[0].type.display[0].translated = 'as the compiler leaves it'
+            return Path('/not/a/real/binary')
+
+        work = Path(mkdtemp())
+        with patch('mccode_antlr.compiler.c.compile_instrument', compile_instrument), \
+                patch('restage.cache.directory_under_module_data_path', lambda *a, **k: work):
+            _compile_instr(InstrEntry.from_instr(instr), instr)
+        self.assertEqual(instr_json_hash(instr), before)
