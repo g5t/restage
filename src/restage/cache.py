@@ -116,6 +116,7 @@ def directory_under_module_data_path(sub: str, prefix=None, suffix=None, name=No
 def _compile_instr(entry: InstrEntry, instr: Instr, config: dict | None = None,
                    mpi: bool = False, acc: bool = False,
                    target=None, flavor=None):
+    from copy import deepcopy
     from mccode_antlr import __version__, Flavor
     from mccode_antlr.compiler.c import compile_instrument, CBinaryTarget
     from mccode_antlr.io.json import save_json
@@ -130,8 +131,12 @@ def _compile_instr(entry: InstrEntry, instr: Instr, config: dict | None = None,
     output = directory_under_module_data_path('bin')
     source_file = output.joinpath(instr.name).with_suffix('.c')
     try:
-        binary_path = compile_instrument(instr, target, output, flavor=flavor, config=config,
-                                         source_file=source_file)
+        # Compiling stores each component block's translation on the component, and an
+        # instrument's components are shared with every other instrument using them, even
+        # one read from a file later. A copy keeps them, and so every hash, as they were:
+        # otherwise each instrument cached after the first in a process looks new.
+        binary_path = compile_instrument(deepcopy(instr), target, output, flavor=flavor,
+                                         config=config, source_file=source_file)
     except RuntimeError as error:
         if 'not found in registries' not in str(error):
             raise
