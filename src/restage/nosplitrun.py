@@ -49,6 +49,19 @@ def nosplitrun_args(instr, parameters, precision, args, **kwargs):
     )
 
 
+def point_parameters(instr, translate, energy_parameter_names, point: dict) -> dict:
+    """One scan point's values as the parameters the instrument is run with.
+
+    Energy parameters (``ei``, ``t``, ...) become chopper settings through ``translate``,
+    which consumes them. Only those the instrument declares itself are passed on as well:
+    any other is not a parameter of the instrument, and naming it is an error.
+    """
+    pars = translate(dict(point))
+    pars.update({k: point[k] for k in energy_parameter_names
+                 if k in point and instr.has_parameter(k)})
+    return pars
+
+
 def nosplitrun(instr, parameters, precision: dict[str, float],
                grid: bool = False,
                dry_run: bool = False,
@@ -127,10 +140,8 @@ def nosplitrun(instr, parameters, precision: dict[str, float],
     detectors, dat_lines, work_dirs = [], [], []
     scan_iter = tqdm(enumerate(scan), desc='nosplitrun', total=n_pts, unit='point', disable=not progress)
     for number, values in scan_iter:
-        pars = translate({n: v for n, v in zip(names, values)})
-        # include energy parameters if present
-        if any(x in parameters for x in energy_parameter_names):
-            pars.update({k: v for k, v in parameters.items() if k in energy_parameter_names})
+        pars = point_parameters(instr, translate, energy_parameter_names,
+                                dict(zip(names, values)))
         instr_pars = collect_parameter_dict(instr, pars)
 
         work_dir = root_dir / str(number)

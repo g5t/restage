@@ -93,5 +93,53 @@ class ArgsParsDirectTest(unittest.TestCase):
         self.assertNotIn('mcpl_filename', result)
 
 
+
+class NosplitrunEnergyParametersTest(unittest.TestCase):
+    """nosplitrun turns a point's ei= and t= into chopper settings, as splitrun does.
+
+    It used to translate them and then copy the raw command-line values back in, which a
+    BIFROST that declares only its chopper knobs refused: 'Parameter ei is not a valid
+    parameter name'. A scanned value would have come back as the whole scan, too.
+    """
+    CHOPPERS = tuple(f'{name}_chopper_{no}' for name in ('pulse_shaping', 'frame_overlap', 'bandwidth')
+                     for no in (1, 2))
+    KNOBS = tuple(f'{c}{k}' for c in CHOPPERS for k in ('_rotation_speed', '_delay'))
+
+    def instrument(self, *extra):
+        from mccode_antlr.loader import parse_mcstas_instr
+        declared = ', '.join(f'{n}=0' for n in (*self.KNOBS, 'sample_rotation', *extra))
+        return parse_mcstas_instr(f"""DEFINE INSTRUMENT bifrost_nosplitrun_test({declared})
+            TRACE
+            COMPONENT origin = Arm() AT (0, 0, 0) ABSOLUTE
+            END""")
+
+    def point(self, instr, point):
+        from restage.energy import (energy_to_chopper_translator, get_energy_parameter_names,
+                                    declared_parameter_names)
+        from restage.instr import collect_parameter_dict
+        from restage.nosplitrun import point_parameters
+        translate = energy_to_chopper_translator(instr.name, declared_parameter_names(instr))
+        pars = point_parameters(instr, translate, get_energy_parameter_names(instr.name), point)
+        return collect_parameter_dict(instr, pars)
+
+    def test_energy_parameters_become_chopper_settings(self):
+        pars = self.point(self.instrument(), {'ei': 4.5, 't': 1e-4, 'sample_rotation': 3.0})
+        self.assertNotIn('ei', pars)
+        self.assertNotIn('t', pars)
+        self.assertEqual(pars['sample_rotation'].value, 3.0)
+        self.assertEqual(pars['pulse_shaping_chopper_1_rotation_speed'].value, 196.0)
+        self.assertNotEqual(pars['bandwidth_chopper_1_delay'].value, 0)
+
+    def test_an_energy_parameter_the_instrument_declares_is_passed_on(self):
+        pars = self.point(self.instrument('ei'), {'ei': 4.5, 't': 1e-4})
+        self.assertEqual(pars['ei'].value, 4.5)
+        self.assertEqual(pars['pulse_shaping_chopper_1_rotation_speed'].value, 196.0)
+
+    def test_the_point_is_left_as_it_was(self):
+        point = {'ei': 4.5, 't': 1e-4, 'sample_rotation': 3.0}
+        self.point(self.instrument(), point)
+        self.assertEqual(point, {'ei': 4.5, 't': 1e-4, 'sample_rotation': 3.0})
+
+
 if __name__ == '__main__':
     unittest.main()
