@@ -13,19 +13,18 @@ def _wavelength_angstrom_to_energy_mev(wavelength):
     return H2_OVER_2M / wavelength / wavelength
 
 
-def experiment_delay(speed: float, centre: float, width: float, pulse: float = 0.0) -> float:
-    """ESS ``ChopDly-S``, in s, for a disk of one opening ``width`` degrees across.
+def experiment_delay(speed: float, centre: float, pulse: float = 0.0) -> float:
+    """ESS ``ChopDly-S``, in s: ``centre`` less the instrument's pulse delay, in one turn.
 
-    The calculations give ``centre``, when the middle of the opening is on the beam. An
-    ESS controller puts the first opening edge, NeXus's ``slit_edges[0]``, on the beam
-    ``pulse + experiment_delay`` after the pulse, and that edge is ``width / 2`` of a turn
-    from the middle: reached later by a disk turning anticlockwise (positive ``speed``,
-    where it closes the opening) and earlier by one turning clockwise (where it opens
-    it). Folded into one turn. The same as ``chopcal.nicos.experiment_delay``.
+    The calculations give ``centre``, when the middle of the opening is on the beam. ESS
+    measures a disk's ``MechDly-S`` to the centre of its reference opening (ECDC's
+    "Choppers" page), so with it set the controller puts that centre on the beam
+    ``pulse + experiment_delay`` after the pulse, whichever way the disk turns. Folded
+    into one turn. The same as ``chopcal.nicos.experiment_delay`` from chopcal 0.9.0.
     """
     if not speed:
         return 0.0
-    return (centre + width / 2.0 / (360.0 * speed) - pulse) % (1.0 / abs(speed))
+    return (centre - pulse) % (1.0 / abs(speed))
 
 
 @dataclass(frozen=True)
@@ -40,9 +39,10 @@ class ChopperKnobs:
     #: How many of the instrument's delay units make one second.
     delay_per_second: float
     description: str
-    #: Whether the delay is an ESS experiment delay, measured to the first opening edge
-    #: less the instrument's ``pulse_delay``, rather than to the middle of the opening.
-    first_edge: bool = False
+    #: Whether the delay is an ESS experiment delay, ``ChopDly-S``: the time the middle of
+    #: the opening is on the beam less the instrument's ``pulse_delay``, folded into one
+    #: turn -- rather than that time itself.
+    experiment: bool = False
 
     def speed_name(self, disk: str) -> str:
         return f'{disk}{self.speed}'
@@ -54,19 +54,15 @@ class ChopperKnobs:
         return tuple(n for d in disks for n in (self.speed_name(d), self.delay_name(d)))
 
     def settings(self, disk: str, speed_hz: float, delay_s: float,
-                 width: float | None = None, pulse_s: float = 0.0) -> dict[str, float]:
+                 pulse_s: float = 0.0) -> dict[str, float]:
         """One disk's speed and delay, calculated in Hz and s, as the instrument wants them.
 
         ``delay_s`` is when the middle of its opening is on the beam. For an experiment
-        delay that becomes `experiment_delay`, which needs the opening's ``width`` in
-        degrees and the instrument's pulse delay in s.
+        delay that becomes `experiment_delay`, which needs the instrument's pulse delay
+        in s.
         """
-        if self.first_edge:
-            if width is None:
-                raise ValueError(f'{disk}: an experiment delay is measured to the first '
-                                 f'opening edge, and restage does not know how wide its '
-                                 f'opening is')
-            delay_s = experiment_delay(speed_hz, delay_s, width, pulse_s)
+        if self.experiment:
+            delay_s = experiment_delay(speed_hz, delay_s, pulse_s)
         return {self.speed_name(disk): speed_hz,
                 self.delay_name(disk): delay_s * self.delay_per_second}
 
@@ -77,7 +73,7 @@ class ChopperKnobs:
 #: emits from 0.12.
 ESS_EXPERIMENT_KNOBS = ChopperKnobs(
     '_rotation_speed', '_experiment_delay', 1e9,
-    "'{name}_rotation_speed' (Hz) and '{name}_experiment_delay' (ns)", first_edge=True)
+    "'{name}_rotation_speed' (Hz) and '{name}_experiment_delay' (ns)", experiment=True)
 
 #: Each knob is named for the ESS log it is published as and declared in that log's unit:
 #: ``{disk}_rotation_speed`` in Hz and ``{disk}_delay`` in ns, the chopper's TotDly. This is
@@ -139,12 +135,12 @@ _RENAMES = (
      "'{name}delay' is in seconds and '{name}_delay' in nanoseconds."),
     ('_experiment_delay', '_delay', "chopper delay as '{name}_experiment_delay'",
      "or rebuild the instrument with niess 0.12 or later. They are not the same number: "
-     "'{name}_delay' was the total, '{name}_experiment_delay' is when the first opening "
-     "edge is on the beam, less the instrument's pulse_delay."),
+     "'{name}_delay' was the total, '{name}_experiment_delay' is when the centre of the "
+     "reference opening is on the beam, less the instrument's pulse_delay."),
     ('_delay', '_experiment_delay', "chopper delay as '{name}_delay'",
      "or build the instrument with the niess release it was written for. They are not the "
      "same number: '{name}_delay' was the total, '{name}_experiment_delay' is when the "
-     "first opening edge is on the beam, less the instrument's pulse_delay."),
+     "centre of the reference opening is on the beam, less the instrument's pulse_delay."),
 )
 
 
@@ -186,7 +182,6 @@ def one_generic_energy_to_chopper_parameters(
         calculate_choppers, chopper_names: tuple[str, ...],
         time: float, order: int, parameters: dict,
         chopper_parameter_present: bool, knobs: ChopperKnobs = LEGACY_KNOBS,
-        widths: dict[str, float] | None = None,
 ):
     from zenlog import log
     if any(x in parameters for x in ('ei', 'wavelength', 'lambda', 'energy', 'e')):
@@ -205,8 +200,7 @@ def one_generic_energy_to_chopper_parameters(
         pulse = float(parameters.get('pulse_delay', 0.0)) / knobs.delay_per_second
         for disk in chopper_names:
             parameters.update(knobs.settings(disk, choppers[LEGACY_KNOBS.speed_name(disk)],
-                                             choppers[LEGACY_KNOBS.delay_name(disk)],
-                                             (widths or {}).get(disk), pulse))
+                                             choppers[LEGACY_KNOBS.delay_name(disk)], pulse))
     return parameters
 
 
@@ -225,15 +219,6 @@ BIFROST_CHOPPERS = tuple(f'{a}_chopper_{b}' for a in ('pulse_shaping', 'frame_ov
                          for b in (1, 2))
 
 
-def _bifrost_widths() -> dict[str, float]:
-    """Each BIFROST disk's one opening, in degrees, in `BIFROST_CHOPPERS` order."""
-    from .constants import (BANDWIDTH_ANGLE, FRAME_OVERLAP_1_ANGLE, FRAME_OVERLAP_2_ANGLE,
-                            PULSE_SHAPING_ANGLE)
-    return dict(zip(BIFROST_CHOPPERS, (PULSE_SHAPING_ANGLE, PULSE_SHAPING_ANGLE,
-                                       FRAME_OVERLAP_1_ANGLE, FRAME_OVERLAP_2_ANGLE,
-                                       BANDWIDTH_ANGLE, BANDWIDTH_ANGLE)))
-
-
 def bifrost_translate_energy_to_chopper_parameters(parameters: dict,
                                                    knobs: ChopperKnobs = LEGACY_KNOBS):
     from .bifrost_choppers import calculate, SLIT_CROSSING
@@ -245,7 +230,7 @@ def bifrost_translate_energy_to_chopper_parameters(parameters: dict,
     time = get_and_remove(parameters, 'time', get_and_remove(parameters, 't', default_time))
     return one_generic_energy_to_chopper_parameters(calculate, BIFROST_CHOPPERS, time, order,
                                                     parameters, chopper_parameter_present,
-                                                    knobs, _bifrost_widths())
+                                                    knobs)
 
 
 CSPEC_CHOPPERS = ('bw1', 'bw2', 'bw3', 's', 'p', 'm1', 'm2')
