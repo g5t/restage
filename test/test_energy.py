@@ -310,8 +310,9 @@ class ESSRenameHintTestCase(unittest.TestCase):
 
 class ExperimentDelayKnobsTestCase(unittest.TestCase):
     """niess 0.12 gives a disk the ESS controller's knobs: ``{name}_experiment_delay`` in ns
-    (ChopDly-S) puts the first opening edge on the beam after the instrument's
-    ``pulse_delay``, and the instrument adds the mechanical delay itself."""
+    (ChopDly-S) puts the centre of its reference opening on the beam after the instrument's
+    ``pulse_delay``, and the instrument adds the mechanical delay itself -- measured to that
+    centre, as ECDC's "Choppers" page says and niess follows from 0.14."""
     DECLARED = tuple(f'{c}{k}' for c in CHOPPERS
                      for k in ('_rotation_speed', '_experiment_delay', '_mechanical_delay')
                      ) + ('pulse_delay',)
@@ -328,16 +329,22 @@ class ExperimentDelayKnobsTestCase(unittest.TestCase):
         self.assertIn('bandwidth_chopper_2_experiment_delay', translated)
         self.assertNotIn('bandwidth_chopper_2_delay', translated)
 
-    def test_the_first_edge_is_half_an_opening_from_its_middle_and_after_the_pulse_delay(self):
-        """bw1 and bw2 share a middle and turn opposite ways, so their first edges -- the
-        one closing bw1, the one opening bw2 -- are an opening's crossing apart, and a
-        pulse delay moves both together."""
-        from restage.constants import BANDWIDTH_ANGLE
+    def test_the_middle_of_the_opening_is_on_the_beam_after_the_pulse_delay(self):
+        """The experiment delay is when the opening's middle is on the beam, less the pulse
+        delay. bw1 and bw2 share a middle and turn opposite ways, and the middle is the same
+        whichever way a disk turns, so they get the same delay; a pulse delay moves both."""
+        from restage.energy import energy_to_chopper_translator, LEGACY_KNOBS
         plain, pulsed = self.translate(), self.translate(pulse_delay=1e4)
+        middles = energy_to_chopper_translator('bifrost', LEGACY_KNOBS.names(CHOPPERS))(
+            dict(self.POINT))
+        for chopper in CHOPPERS:
+            turn = 1e9 / abs(plain[f'{chopper}_rotation_speed'])
+            self.assertAlmostEqual(plain[f'{chopper}_experiment_delay'],
+                                   middles[f'{chopper}delay'] * 1e9 % turn, delta=1e-3,
+                                   msg=chopper)
         bw1, bw2 = (plain[f'bandwidth_chopper_{n}_experiment_delay'] for n in (1, 2))
+        self.assertAlmostEqual(bw1, bw2, delta=1e-3)
         turn = 1e9 / 14     # each is folded into one turn, so compare modulo it
-        self.assertAlmostEqual((bw1 - bw2) % turn, BANDWIDTH_ANGLE / 360 / 14 * 1e9,
-                               delta=1e-3)
         self.assertAlmostEqual(
             (plain['bandwidth_chopper_1_experiment_delay']
              - pulsed['bandwidth_chopper_1_experiment_delay']) % turn, 1e4, delta=1e-3)
@@ -368,8 +375,3 @@ class ExperimentDelayKnobsTestCase(unittest.TestCase):
         hint = chopper_convention_hint(self.DECLARED, ['bandwidth_chopper_1_delay'])
         self.assertIn("'bandwidth_chopper_1_experiment_delay'", hint)
         self.assertIn('not the same number', hint)
-
-    def test_an_instrument_without_widths_cannot_have_them(self):
-        from restage.energy import ESS_EXPERIMENT_KNOBS
-        with self.assertRaises(ValueError):
-            ESS_EXPERIMENT_KNOBS.settings('bw1', 14.0, 0.05)
